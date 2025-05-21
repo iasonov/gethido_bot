@@ -5,7 +5,12 @@ from my_secrets import BOT_TOKEN
 
 # === Конфигурация ===
 API_URL = f'https://api.telegram.org/bot{BOT_TOKEN}/'
-ADMIN_IDS = [211570366, 403700929]  # Вставь свои Telegram user_id
+ADMIN_IDS = [211570366, # Игорь Асонов
+             517348694, # Мария Рыбалко
+             189526817, # Алена Абрамова
+             1172339189, # Елизавета Павлова
+             403700929 ]  # Екатерина Каляева
+            # Вставь свои Telegram user_id
 CHAT_IDS_FILE = 'chat_ids.txt'
 
 # === Вспомогательные функции ===
