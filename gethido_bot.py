@@ -14,7 +14,7 @@ ADMIN_IDS = [211570366, # Игорь Асонов
              300247573, # Олеся Карпова
              403700929 ]  # Екатерина Каляева
             # Вставь свои Telegram user_id
-CHAT_IDS_FILE = 'chat_ids_test.txt'
+CHAT_IDS_FILE = 'chat_ids_work.txt'
 LOG_FILE = 'logs.txt'
 
 # === Вспомогательные функции ===
