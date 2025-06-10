@@ -33,7 +33,7 @@ def get_updates(offset=None):
     payload = {
         "offset": offset,
         "limit": None,
-        "timeout": None # 10
+        "timeout": 10
     }
     headers = {
         "accept": "application/json",
@@ -41,12 +41,25 @@ def get_updates(offset=None):
         "content-type": "application/json"
     }
 
-    response = requests.post(url, json=payload, headers=headers)
-    return response.json()
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        return response.json()
+    except requests.exceptions.Timeout:
+        print("Timeout")
+        return None
+        # Maybe set up for a retry, or continue in a retry loop
+    except requests.exceptions.TooManyRedirects:
+        print("TooManyRedirects")
+        return None
+        # Tell the user their URL was bad and try a different one
+    except requests.exceptions.RequestException as e:
+        print("RequestException")
+        # catastrophic error. bail.
+        return None
 
 def send_message(chat_id, text, markdown='Markdown'):
     url = API_URL + 'sendMessage'
-    data = {'chat_id': chat_id, 
+    data = {'chat_id': chat_id,
             'text': text,
             'parse_mode': markdown
             }
@@ -54,12 +67,12 @@ def send_message(chat_id, text, markdown='Markdown'):
 
 def forward_message(chat_id, from_chat_id, message_id):
     url = API_URL + 'copyMessage'
-    data = {'chat_id': chat_id, 
+    data = {'chat_id': chat_id,
             'from_chat_id': from_chat_id,
             'message_id': message_id
             }
-    requests.post(url, data=data) 
-    
+    requests.post(url, data=data)
+
 
 def load_chat_ids():
     if not os.path.exists(CHAT_IDS_FILE):
@@ -102,7 +115,7 @@ def apply_markdown_entities(text, entities):
             continue
 
         result = result[:start + shift - delta_shift] + wrap + result[end + shift - delta_shift:]
-       # 
+       #
 
     return result
 
@@ -115,6 +128,8 @@ def main():
     while True:
         try:
             updates = get_updates(offset)
+            if updates is None:
+                continue
             groups_ids = load_chat_ids()
 
             for update in updates.get('result', []):
@@ -147,7 +162,7 @@ def main():
                         first_name = user.get("first_name", "")
                         last_name = user.get("last_name", "")
                         username = user.get("username", "")
-                        
+
                         sender_name = f"{first_name} {last_name}".strip()
                         if username:
                             sender_name += f" (@{username})"
@@ -164,7 +179,7 @@ def main():
                             send_message(admin_id, summary_text)
 
                         # Логируем рассылку
-                        log_broadcast(sender_name, msg_text)    
+                        log_broadcast(sender_name, msg_text)
                     else:
                         send_message(chat_id, "Вы не относитесь к менеджерам и не можете рассылать информацию по группам. Обратитесь к @iasonov")
 
