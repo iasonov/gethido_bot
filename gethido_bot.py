@@ -14,7 +14,7 @@ ADMIN_IDS = [211570366, # Игорь Асонов
              300247573, # Олеся Карпова
              403700929 ]  # Екатерина Каляева
             # Вставь свои Telegram user_id
-CHAT_IDS_FILE = 'chat_ids_work.txt'
+CHAT_IDS_FILE = 'chat_ids_test.txt'
 LOG_FILE = 'logs.txt'
 
 # === Вспомогательные функции ===
@@ -63,7 +63,7 @@ def send_message(chat_id, text, markdown='Markdown'):
             'text': text,
             'parse_mode': markdown
             }
-    requests.post(url, data=data)
+    requests.post(url, data=data, timeout=16)
 
 def forward_message(chat_id, from_chat_id, message_id):
     url = API_URL + 'copyMessage'
@@ -71,7 +71,7 @@ def forward_message(chat_id, from_chat_id, message_id):
             'from_chat_id': from_chat_id,
             'message_id': message_id
             }
-    requests.post(url, data=data)
+    requests.post(url, data=data, timeout=16)
 
 
 def load_chat_ids():
@@ -156,6 +156,7 @@ def main():
                         # Пересылаем сообщение во все группы
                         for group_id in groups_ids:
                             forward_message(group_id, chat_id, message['message_id'])
+                            time.sleep(16)
 
                         # Получаем данные об отправителе
                         user = message.get("from", {})
