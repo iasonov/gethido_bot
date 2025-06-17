@@ -19,11 +19,22 @@ LOG_FILE = 'logs.txt'
 
 # === Вспомогательные функции ===
 
-def log_broadcast(sender_name, message_text):
+def log_broadcast(sender_name, message_text, chats=None):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_entry = f"[{timestamp}] {sender_name}:\n{message_text}\n\n"
     with open(LOG_FILE, 'a', encoding='utf-8') as f:
         f.write(log_entry)
+        if chats is not None:
+            try:
+                with open(chats, 'r', encoding='utf-8') as c:
+                    for line in c:
+                        f.write(line)
+            except:
+                f.write("Chats file {chats} cannot be opened\n\n", chats)
+        else:
+            f.write("No chats file provided for logging\n\n")
+        f.write("-----------------------------------------\n\n")
+
 
 
 def get_updates(offset=None):
@@ -180,7 +191,7 @@ def main():
                             send_message(admin_id, summary_text)
 
                         # Логируем рассылку
-                        log_broadcast(sender_name, msg_text)
+                        log_broadcast(sender_name, msg_text, CHAT_IDS_FILE)
                     else:
                         send_message(chat_id, "Вы не относитесь к менеджерам и не можете рассылать информацию по группам. Обратитесь к @iasonov")
 
