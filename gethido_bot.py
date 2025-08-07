@@ -18,8 +18,8 @@ ADMIN_IDS = [
     403700929,
 ]  # Екатерина Каляева
 # Вставь свои Telegram user_id
-CHAT_IDS_FILE = "chat_ids_test.txt"
-# CHAT_IDS_FILE = 'chat_ids_test.txt'
+# CHAT_IDS_FILE = "chat_ids_master_load_reminder.txt"
+CHAT_IDS_FILE = 'chat_ids_master_07.08.25.txt'
 LOG_FILE = "logs.txt"
 DELAY = 10
 
