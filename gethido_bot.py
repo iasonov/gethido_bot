@@ -10,16 +10,16 @@ from my_secrets import BOT_TOKEN
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 ADMIN_IDS = [
     211570366,  # Игорь Асонов
-    517348694,  # Мария Рыбалко
-    189526817,  # Алена Абрамова
-    1172339189,  # Елизавета Павлова
-    196962881,  # Виктория Оськина
-    300247573,  # Олеся Карпова
-    403700929,
+    # 517348694,  # Мария Рыбалко
+    # 189526817,  # Алена Абрамова
+    # 1172339189,  # Елизавета Павлова
+    # 196962881,  # Виктория Оськина
+    # 300247573,  # Олеся Карпова
+    # 403700929,
 ]  # Екатерина Каляева
 # Вставь свои Telegram user_id
-# CHAT_IDS_FILE = "chat_ids_master_load_reminder.txt"
-CHAT_IDS_FILE = 'chat_ids_master_21.08.25.txt'
+CHAT_IDS_FILE = "chat_ids_master_moscow_spb_07.07.25_remind.txt"
+# CHAT_IDS_FILE = 'chat_ids_test.txt'
 LOG_FILE = "logs.txt"
 DELAY = 10
 
