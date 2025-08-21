@@ -19,7 +19,7 @@ ADMIN_IDS = [
 ]  # Екатерина Каляева
 # Вставь свои Telegram user_id
 # CHAT_IDS_FILE = "chat_ids_master_load_reminder.txt"
-CHAT_IDS_FILE = 'chat_ids_master_07.08.25.txt'
+CHAT_IDS_FILE = 'chat_ids_master_21.08.25.txt'
 LOG_FILE = "logs.txt"
 DELAY = 10
 
@@ -184,7 +184,10 @@ def main():
                     if user_id in ADMIN_IDS:  # and text.startswith('/broadcast'):
                         # Пересылаем сообщение во все группы
                         for group_id in groups_ids:
-                            forward_message(group_id, chat_id, message["message_id"])
+                            if forward_message(group_id, chat_id, message["message_id"]):
+                                print(f"Message forwarded to {group_id}")
+                            else:
+                                print(f"Failed to forward message to {group_id}")
                             time.sleep(DELAY)
 
                         # Получаем данные об отправителе
