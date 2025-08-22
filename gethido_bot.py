@@ -10,16 +10,16 @@ from my_secrets import BOT_TOKEN
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 ADMIN_IDS = [
     211570366,  # Игорь Асонов
-    517348694,  # Мария Рыбалко
-    189526817,  # Алена Абрамова
-    1172339189,  # Елизавета Павлова
-    196962881,  # Виктория Оськина
-    300247573,  # Олеся Карпова
-    403700929,
+    # 517348694,  # Мария Рыбалко
+    # 189526817,  # Алена Абрамова
+    # 1172339189,  # Елизавета Павлова
+    # 196962881,  # Виктория Оськина
+    # 300247573,  # Олеся Карпова
+    # 403700929,
 ]  # Екатерина Каляева
 # Вставь свои Telegram user_id
-# CHAT_IDS_FILE = "chat_ids_master_load_reminder.txt"
-CHAT_IDS_FILE = 'chat_ids_master_07.08.25.txt'
+CHAT_IDS_FILE = "chat_ids_master_moscow_spb_07.07.25_remind.txt"
+# CHAT_IDS_FILE = 'chat_ids_test.txt'
 LOG_FILE = "logs.txt"
 DELAY = 10
 
@@ -184,7 +184,10 @@ def main():
                     if user_id in ADMIN_IDS:  # and text.startswith('/broadcast'):
                         # Пересылаем сообщение во все группы
                         for group_id in groups_ids:
-                            forward_message(group_id, chat_id, message["message_id"])
+                            if forward_message(group_id, chat_id, message["message_id"]):
+                                print(f"Message forwarded to {group_id}")
+                            else:
+                                print(f"Failed to forward message to {group_id}")
                             time.sleep(DELAY)
 
                         # Получаем данные об отправителе
