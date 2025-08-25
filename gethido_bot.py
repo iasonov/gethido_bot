@@ -20,7 +20,7 @@ ADMIN_IDS = [
     # 403700929,
 ]  # Екатерина Каляева
 # Вставь свои Telegram user_id
-CHAT_IDS_FILE = "chat_ids_master_22.08.25_all_september.txt"
+# CHAT_IDS_FILE = "chat_ids_master_22.08.25_all_september.txt"
 # CHAT_IDS_FILE = 'chat_ids_test.txt'
 PROGRAMS_CSV_FILE = "programs.csv"
 LOG_FILE = "logs.txt"
@@ -542,7 +542,7 @@ def handle_callback_query(callback_query):
 
 def main():
     print("Бот запущен (polling)...")
-    offset = 216122217
+    offset = None
 
     # Load user states at startup
     load_user_states()
