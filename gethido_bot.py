@@ -21,7 +21,7 @@ ADMIN_IDS = [
 CHAT_IDS_FILE = "chat_ids_all.txt"
 # CHAT_IDS_FILE = 'chat_ids_test.txt'
 LOG_FILE = "logs.txt"
-DELAY = 10
+DELAY = 5
 
 # === Вспомогательные функции ===
 
