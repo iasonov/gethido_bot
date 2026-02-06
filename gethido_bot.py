@@ -18,7 +18,7 @@ ADMIN_IDS = [
     # 403700929,
 ]  # Екатерина Каляева
 # Вставь свои Telegram user_id
-CHAT_IDS_FILE = "chat_ids_23.01.25_part2.txt"
+CHAT_IDS_FILE = "chat_ids_all.txt"
 # CHAT_IDS_FILE = 'chat_ids_test.txt'
 LOG_FILE = "logs.txt"
 DELAY = 5
@@ -94,6 +94,7 @@ def forward_message(chat_id, from_chat_id, message_id):
 
 def load_chat_ids():
     if not os.path.exists(CHAT_IDS_FILE):
+        print(CHAT_IDS_FILE + " NOT EXIST")
         return set()
     with open(CHAT_IDS_FILE, "r", encoding="utf-8", errors="ignore") as f:
         return set(line.strip()[: line.strip().find(" ")] for line in f if line.strip())
