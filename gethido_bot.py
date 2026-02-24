@@ -3,6 +3,7 @@ import time
 from datetime import datetime
 import csv
 import json
+import pandas as pd
 
 import requests
 
@@ -20,8 +21,7 @@ ADMIN_IDS = [
     # 403700929,
 ]  # Екатерина Каляева
 # Вставь свои Telegram user_id
-# CHAT_IDS_FILE = "chat_ids_master_22.08.25_all_september.txt"
-# CHAT_IDS_FILE = 'chat_ids_test.txt'
+
 PROGRAMS_CSV_FILE = "programs.csv"
 LOG_FILE = "logs.txt"
 STATE_FILE = "user_states.json"
@@ -31,7 +31,8 @@ DELAY = 10
 STATE_WAITING_FOR_TEXT = "waiting_for_text"
 STATE_LEVEL_SELECTION = "level_selection"
 STATE_PARTNER_SELECTION = "partner_selection"
-STATE_DATE_SELECTION = "date_selection"
+STATE_CAMPUS_SELECTION = "campus_selection"
+STATE_EARLYINVITATION_SELECTION = "earlyinvitation_selection"
 STATE_PROGRAM_CONFIRMATION = "program_confirmation"
 STATE_FINAL_CONFIRMATION = "final_confirmation"
 
@@ -109,40 +110,66 @@ def get_user_data(user_id, key, default=None):
 # Функции для работы с CSV файлом програм
 def load_programs():
     """Load programs from CSV file"""
-    programs = []
+    programs = None
     try:
-        with open(PROGRAMS_CSV_FILE, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                programs.append(row)
+        programs = pd.read_csv(PROGRAMS_CSV_FILE, sep=";")
     except Exception as e:
         print(f"Error loading programs: {e}")
+    # programs = []
+    # try:
+    #     with open(PROGRAMS_CSV_FILE, 'r', encoding='utf-8') as f:
+    #         reader = csv.DictReader(f)
+    #         for row in reader:
+    #             programs.append(row)
+    # except Exception as e:
+    #     print(f"Error loading programs: {e}")
     return programs
 
 
-def filter_programs(programs, level=None, partner_filter=None, date_filter=None):
-    """Filter programs by level, partner status, and date"""
+def filter_programs(programs, level=None, partner_filter=None, campus_filter=None, earlyinvitation_filter=None):
+    """Filter programs by level, early invitation and partner status, and campus"""
     filtered = programs.copy()
 
     # Filter by level
-    if level and level != 'all':
-        filtered = [p for p in filtered if p['level'] == level]
+    if level and level != 'all': # master of bachelor
+        filtered = filtered[filtered['level'] == level[6:]]
+    #    filtered = [p for p in filtered if p['level'] == level[6:]] # first letters "level_" doesn't count
 
     # Filter by partner status
-    if partner_filter:
-        if partner_filter == 'no_partners':
-            filtered = [p for p in filtered if p['partner'] != 'netology' and p['partner'] != 'carpov_courses']
-        elif partner_filter == 'no_netology':
-            filtered = [p for p in filtered if p['partner'] != 'netology']
-        elif partner_filter == 'only_netology':
-            filtered = [p for p in filtered if p['partner'] == 'netology']
+    if partner_filter and partner_filter != 'all':
+        if partner_filter == 'partner_no_partners':
+            filtered = filtered[filtered['partner'] == 'нет']
+        #    filtered = [p for p in filtered if p['partner'] == 'нет']
+        elif partner_filter == 'partner_no_netology':
+            filtered = filtered[filtered['partner'] == 'Нетология']   
+        #    filtered = [p for p in filtered if p['partner'] != 'Нетология']
+        elif partner_filter == 'partner_no_carpovcourses':
+            filtered = filtered[filtered['partner'] == 'Карпов Курсы']  
+        #    filtered = [p for p in filtered if p['partner'] != 'Карпов Курсы']
 
-    # Filter by application end date
-    if date_filter:
-        if date_filter == 'august':
-            filtered = [p for p in filtered if p['application_end_date'].endswith('Aug')]
-        elif date_filter == 'september':
-            filtered = [p for p in filtered if p['application_end_date'].endswith('Sep')]
+    # Filter by campus
+    if campus_filter and campus_filter != 'all':
+        if campus_filter == 'msk':
+            filtered = filtered[filtered['campus'] == 'Москва']
+        #    filtered = [p for p in filtered if p['campus'].startswith('Москва')]
+        elif campus_filter == 'nn':
+            filtered = filtered[filtered['campus'] == 'Нижний Новгород']
+        #    filtered = [p for p in filtered if p['campus'].startswith('Нижний Новгород')]
+        elif campus_filter == 'perm':
+            filtered = filtered[filtered['campus'] == 'Пермь']
+        #    filtered = [p for p in filtered if p['campus'].startswith('Пермь')]
+        elif campus_filter == 'spb':
+            filtered = filtered[filtered['campus'] == 'Санкт-Петербург']
+        #    filtered = [p for p in filtered if p['campus'].startswith('Санкт-Петербург')]
+
+    # Filter by early invitation status
+    if earlyinvitation_filter and earlyinvitation_filter != 'all':
+        if earlyinvitation_filter == 'no':
+            filtered = filtered[filtered['early_invitation'] == 'нет']
+        #    filtered = [p for p in filtered if p['early_invitation'] == 'нет']
+        elif earlyinvitation_filter == 'yes':
+            filtered = filtered[filtered['early_invitation'] == 'да']
+        #    filtered = [p for p in filtered if p['early_invitation'] != 'да']
 
     return filtered
 
@@ -159,24 +186,36 @@ def create_level_keyboard():
 
 
 def create_partner_keyboard():
-    """Create keyboard for partner selection"""
+    """Create keyboard for partner status selection"""
     keyboard = [
         [{"text": "Все программы", "callback_data": "partner_all"}],
         [{"text": "Без партнерских программ", "callback_data": "partner_no_partners"}],
         [{"text": "Без программ Нетологии", "callback_data": "partner_no_netology"}],
-        [{"text": "Только программы Нетологии", "callback_data": "partner_only_netology"}],
+        [{"text": "Без программ Карпов Курсы", "callback_data": "partner_no_carpovcourses"}],
         [{"text": "← Назад", "callback_data": "back_to_level"}]
     ]
     return keyboard
 
-
-def create_date_keyboard():
-    """Create keyboard for date selection"""
+def create_campus_keyboard():
+    """Create keyboard for campus selection"""
     keyboard = [
-        [{"text": "Все программы", "callback_data": "date_all"}],
-        [{"text": "Окончание приема в августе", "callback_data": "date_august"}],
-        [{"text": "Окончание приема в сентябре", "callback_data": "date_september"}],
+        [{"text": "Все", "callback_data": "campus_all"}],
+        [{"text": "Только Москва", "callback_data": "campus_msk"}],
+        [{"text": "Только НН", "callback_data": "campus_nn"}],
+        [{"text": "Только Пермь", "callback_data": "campus_perm"}],
+        [{"text": "Только СПб", "callback_data": "campus_spb"}],
         [{"text": "← Назад", "callback_data": "back_to_partner"}]
+    ]
+    return keyboard
+
+
+def create_earlyinvitation_keyboard():
+    """Create keyboard for early invitation status selection"""
+    keyboard = [
+        [{"text": "Все", "callback_data": "earlyinvitation_all"}],
+        [{"text": "Участвуют в РП", "callback_data": "earlyinvitation_yes"}],
+        [{"text": "Не участвуют в РП", "callback_data": "earlyinvitation_no"}],
+        [{"text": "← Назад", "callback_data": "back_to_campus"}]
     ]
     return keyboard
 
@@ -186,7 +225,7 @@ def create_program_list_keyboard(programs, selected_programs):
     keyboard = []
 
     for i, program in enumerate(programs):
-        program_id = str(program['chat_id'])
+        program_id = str(program['tg_chat_id'])
         is_selected = program_id in selected_programs
         icon = "✅" if is_selected else "❌"
         text = f"{icon} {program['program']} ({program['level']})"
@@ -195,7 +234,7 @@ def create_program_list_keyboard(programs, selected_programs):
 
     # Add navigation buttons
     keyboard.append([
-        {"text": "← Назад", "callback_data": "back_to_date"},
+        {"text": "← Назад", "callback_data": "back_to_earlyinvitation"},
         {"text": "Продолжить ▶️", "callback_data": "confirm_programs"}
     ])
 
@@ -279,8 +318,9 @@ def send_message_with_keyboard(chat_id, text, keyboard, markdown="Markdown"):
 def forward_message(chat_id, from_chat_id, message_id):
     url = API_URL + "copyMessage"
     data = {"chat_id": chat_id, "from_chat_id": from_chat_id, "message_id": message_id}
+    header = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
     try:
-        r = requests.post(url, data=data, timeout=DELAY, headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'})
+        r = requests.post(url, data=data, timeout=DELAY, headers=header)
         if r.status_code != requests.codes.ok:
             print(f"Failed to forward message to {chat_id} with code {r.status_code}")
             return False
@@ -304,42 +344,42 @@ def save_chat_id(chat_id):
             f.write(f"{chat_id}\n")
 
 
-def apply_markdown_entities(text, entities):
-    result = text
-    shift = 0
-    # TODO there are problems in case of same offset (example: bold inside link)
-    for e in sorted(entities, key=lambda x: x["offset"] + x["length"]):
-        start = e["offset"]
-        end = start + e["length"]
-        t = text[start:end]
+# def apply_markdown_entities(text, entities):
+#     result = text
+#     shift = 0
+#     # TODO there are problems in case of same offset (example: bold inside link)
+#     for e in sorted(entities, key=lambda x: x["offset"] + x["length"]):
+#         start = e["offset"]
+#         end = start + e["length"]
+#         t = text[start:end]
 
-        if e["type"] == "bold":
-            wrap = f"*{t}*"
-            delta_shift = len(wrap) - len(t)
-            shift += delta_shift
-        elif e["type"] == "italic":
-            wrap = f"_{t}_"
-            delta_shift = len(wrap) - len(t)
-            shift += delta_shift
-        elif e["type"] == "code":
-            wrap = f"`{t}`"
-            delta_shift = len(wrap) - len(t)
-            shift += delta_shift
-        elif e["type"] == "text_link":
-            wrap = f"[{t}]({e['url']})"
-            delta_shift = len(wrap) - len(t)
-            shift += delta_shift
-        else:
-            continue
+#         if e["type"] == "bold":
+#             wrap = f"*{t}*"
+#             delta_shift = len(wrap) - len(t)
+#             shift += delta_shift
+#         elif e["type"] == "italic":
+#             wrap = f"_{t}_"
+#             delta_shift = len(wrap) - len(t)
+#             shift += delta_shift
+#         elif e["type"] == "code":
+#             wrap = f"`{t}`"
+#             delta_shift = len(wrap) - len(t)
+#             shift += delta_shift
+#         elif e["type"] == "text_link":
+#             wrap = f"[{t}]({e['url']})"
+#             delta_shift = len(wrap) - len(t)
+#             shift += delta_shift
+#         else:
+#             continue
 
-        result = (
-            result[: start + shift - delta_shift]
-            + wrap
-            + result[end + shift - delta_shift :]
-        )
-    #
+#         result = (
+#             result[: start + shift - delta_shift]
+#             + wrap
+#             + result[end + shift - delta_shift :]
+#         )
+#     #
 
-    return result
+#     return result
 
 
 def answer_callback_query(callback_query_id, text=None):
@@ -379,43 +419,55 @@ def handle_callback_query(callback_query):
         answer_callback_query(callback_id, "У вас нет прав доступа")
         return
 
-    programs = load_programs()
-
     if data.startswith("level_"):
         level = data.replace("level_", "")
         set_user_data(user_id, "level", level)
-        set_user_state(user_id, STATE_PARTNER_SELECTION)
 
+        set_user_state(user_id, STATE_PARTNER_SELECTION)
         keyboard = create_partner_keyboard()
-        text = "Выберите партнерские программы:"
+        text = "Выберите программы по партнерскому статусу:"
         edit_message_text(chat_id, message_id, text, keyboard)
 
     elif data.startswith("partner_"):
         partner_filter = data.replace("partner_", "")
         set_user_data(user_id, "partner_filter", partner_filter)
-        set_user_state(user_id, STATE_DATE_SELECTION)
 
-        keyboard = create_date_keyboard()
-        text = "Выберите сроки окончания приема документов:"
+        set_user_state(user_id, STATE_CAMPUS_SELECTION)
+        keyboard = create_campus_keyboard()
+        text = "Выберите к какому офлайн-кампусу относится программа:"
         edit_message_text(chat_id, message_id, text, keyboard)
 
-    elif data.startswith("date_"):
-        date_filter = data.replace("date_", "")
-        set_user_data(user_id, "date_filter", date_filter)
+    elif data.startswith("campus_"):
+        campus_filter = data.replace("campus_", "")
+        set_user_data(user_id, "campus_filter", campus_filter)
+        set_user_state(user_id, STATE_EARLYINVITATION_SELECTION)
+
+        keyboard = create_earlyinvitation_keyboard()
+        text = "Выберите участвует ли программа в раннем приглашении:"
+        edit_message_text(chat_id, message_id, text, keyboard)
+
+    elif data.startswith("earlyinvitation_"):
+        earlyinvitation_filter = data.replace("earlyinvitation_", "")
+        set_user_data(user_id, "earlyinvitation_filter", earlyinvitation_filter)
+
         set_user_state(user_id, STATE_PROGRAM_CONFIRMATION)
 
         # Filter programs based on selections
         level = get_user_data(user_id, "level")
         partner_filter = get_user_data(user_id, "partner_filter")
-        filtered_programs = filter_programs(programs, level, partner_filter, date_filter)
+        campus_filter = get_user_data(user_id, "campus_filter")
+        earlyinvitation_filter = get_user_data(user_id, "earlyinvitation_filter")
+        
+        programs = load_programs()
+        filtered_programs = filter_programs(programs, level, partner_filter, campus_filter, earlyinvitation_filter)
 
         # Initialize all programs as selected
-        selected_programs = set([str(p['chat_id']) for p in filtered_programs])
+        selected_programs = set([str(p['tg_chat_id']) for _, p in filtered_programs.iterrows()])
         set_user_data(user_id, "filtered_programs", filtered_programs)
         set_user_data(user_id, "selected_programs", list(selected_programs))
 
         keyboard = create_program_list_keyboard(filtered_programs, selected_programs)
-        text = "Выберите программы для рассылки (нажмите на программу, чтобы включить/выключить):"
+        text = "Финально выберите программы для рассылки (нажмите на программу, чтобы включить/выключить):"
         edit_message_text(chat_id, message_id, text, keyboard)
 
     elif data.startswith("toggle_program_"):
@@ -424,7 +476,7 @@ def handle_callback_query(callback_query):
         selected_programs = set(get_user_data(user_id, "selected_programs", []))
 
         if program_index < len(filtered_programs):
-            program_id = str(filtered_programs[program_index]['chat_id'])
+            program_id = str(filtered_programs[program_index]['tg_chat_id'])
             if program_id in selected_programs:
                 selected_programs.remove(program_id)
             else:
@@ -446,7 +498,7 @@ def handle_callback_query(callback_query):
         # Create final confirmation text
         selected_program_names = []
         for program in filtered_programs:
-            if str(program['chat_id']) in selected_programs:
+            if str(program['tg_chat_id']) in selected_programs:
                 selected_program_names.append(f"• {program['program']} ({program['level']})")
 
         confirmation_text = f"*Подтверждение рассылки*\n\n*Текст:*\n{broadcast_text}\n\n*Программы (всего: {len(selected_program_names)}):*\n" + "\n".join(selected_program_names)
@@ -463,8 +515,8 @@ def handle_callback_query(callback_query):
         # Create list of selected chat IDs
         selected_chat_ids = []
         for program in filtered_programs:
-            if str(program['chat_id']) in selected_programs:
-                selected_chat_ids.append(program['chat_id'])
+            if str(program['tg_chat_id']) in selected_programs:
+                selected_chat_ids.append(program['tg_chat_id'])
 
         # Get original message for forwarding
         original_message_id = get_user_data(user_id, "original_message_id")
@@ -515,10 +567,16 @@ def handle_callback_query(callback_query):
         text = "Выберите партнерские программы:"
         edit_message_text(chat_id, message_id, text, keyboard)
 
-    elif data == "back_to_date":
-        set_user_state(user_id, STATE_DATE_SELECTION)
-        keyboard = create_date_keyboard()
-        text = "Выберите сроки окончания приема документов:"
+    elif data == "back_to_campus":
+        set_user_state(user_id, STATE_CAMPUS_SELECTION)
+        keyboard = create_campus_keyboard()
+        text = "Выберите офлайн-кампус программы:"
+        edit_message_text(chat_id, message_id, text, keyboard)
+
+    elif data == "back_to_earlyinvitation":
+        set_user_state(user_id, STATE_EARLYINVITATION_SELECTION)
+        keyboard = create_earlyinvitation_keyboard()
+        text = "Выберите участвует ли программа в раннем приглашении:"
         edit_message_text(chat_id, message_id, text, keyboard)
 
     elif data == "back_to_programs":
@@ -600,6 +658,7 @@ def main():
                             broadcast_text = text
                             set_user_data(user_id, "broadcast_text", broadcast_text)
                             set_user_data(user_id, "original_message_id", message["message_id"])
+                            
                             set_user_state(user_id, STATE_LEVEL_SELECTION)
 
                             keyboard = create_level_keyboard()

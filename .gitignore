@@ -176,3 +176,4 @@ cython_debug/
 .pypirc
 ~$parse_names.xlsx
 *.swp
+user_states.json
