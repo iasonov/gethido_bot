@@ -25,6 +25,7 @@ ADMIN_IDS = [
 PROGRAMS_CSV_FILE = "programs.csv"
 LOG_FILE = "logs.txt"
 STATE_FILE = "user_states.json"
+STATE_BACKUP_FILE = "user_states.json.bak"
 DELAY = 10
 
 # Состояния пользователя
@@ -47,14 +48,28 @@ user_data = {}
 def load_user_states():
     """Load user states from file"""
     global user_states, user_data
+
+    def _load_state_file(path):
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data.get('states', {}), data.get('data', {})
+
     try:
         if os.path.exists(STATE_FILE):
-            with open(STATE_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                user_states = data.get('states', {})
-                user_data = data.get('data', {})
+            user_states, user_data = _load_state_file(STATE_FILE)
+        elif os.path.exists(STATE_BACKUP_FILE):
+            user_states, user_data = _load_state_file(STATE_BACKUP_FILE)
     except Exception as e:
-        print(f"Error loading user states: {e}")
+        print(f"Error loading user states from {STATE_FILE}: {e}")
+        try:
+            if os.path.exists(STATE_BACKUP_FILE):
+                print(f"Trying backup state file: {STATE_BACKUP_FILE}")
+                user_states, user_data = _load_state_file(STATE_BACKUP_FILE)
+                print("Backup user state loaded successfully")
+                return
+        except Exception as backup_e:
+            print(f"Error loading backup user states: {backup_e}")
+
         user_states = {}
         user_data = {}
 
@@ -62,13 +77,41 @@ def load_user_states():
 def save_user_states():
     """Save user states to file"""
     try:
-        with open(STATE_FILE, 'w', encoding='utf-8') as f:
-            json.dump({
-                'states': user_states,
-                'data': user_data
-            }, f, ensure_ascii=False, indent=2)
+        state_payload = {
+            'states': user_states,
+            'data': user_data
+        }
+
+        temp_file = f"{STATE_FILE}.tmp"
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(state_payload, f, ensure_ascii=False, indent=2)
+
+        if os.path.exists(STATE_FILE):
+            with open(STATE_BACKUP_FILE, 'w', encoding='utf-8') as f:
+                json.dump(state_payload, f, ensure_ascii=False, indent=2)
+
+        os.replace(temp_file, STATE_FILE)
     except Exception as e:
         print(f"Error saving user states: {e}")
+
+
+def serialize_filtered_programs(filtered_programs):
+    """Convert DataFrame to JSON-serializable records for persistence."""
+    if filtered_programs is None:
+        return []
+    return filtered_programs.to_dict(orient='records')
+
+
+def get_filtered_programs(user_id):
+    """Get filtered programs for user as DataFrame."""
+    records = get_user_data(user_id, "filtered_programs", [])
+    if not records:
+        return None
+    try:
+        return pd.DataFrame(records)
+    except Exception as e:
+        print(f"Error rebuilding filtered programs for user {user_id}: {e}")
+        return None
 
 
 def set_user_state(user_id, state):
@@ -224,7 +267,7 @@ def create_program_list_keyboard(programs, selected_programs):
     """Create keyboard for program selection with toggle buttons"""
     keyboard = []
 
-    for i, program in programs.iterrows():
+    for i, program in programs.reset_index(drop=True).iterrows():
         program_id = str(program['tg_chat_id'])
         is_selected = program_id in selected_programs
         icon = "✅" if is_selected else "❌"
@@ -463,7 +506,7 @@ def handle_callback_query(callback_query):
 
         # Initialize all programs as selected
         selected_programs = set([str(p['tg_chat_id']) for _, p in filtered_programs.iterrows()])
-        set_user_data(user_id, "filtered_programs", filtered_programs)
+        set_user_data(user_id, "filtered_programs", serialize_filtered_programs(filtered_programs))
         set_user_data(user_id, "selected_programs", list(selected_programs))
 
         keyboard = create_program_list_keyboard(filtered_programs, selected_programs)
@@ -472,11 +515,23 @@ def handle_callback_query(callback_query):
 
     elif data.startswith("toggle_program_"):
         program_index = int(data.replace("toggle_program_", ""))
-        filtered_programs = get_user_data(user_id, "filtered_programs")
+        filtered_programs = get_filtered_programs(user_id)
         selected_programs = set(get_user_data(user_id, "selected_programs", []))
 
+        if filtered_programs is None or filtered_programs.empty:
+            clear_user_state(user_id)
+            set_user_state(user_id, STATE_LEVEL_SELECTION)
+            keyboard = create_level_keyboard()
+            text = (
+                "Похоже, сохраненное состояние рассылки потерялось после перезапуска. "
+                "Давайте начнем заново: выберите уровень программ."
+            )
+            edit_message_text(chat_id, message_id, text, keyboard)
+            answer_callback_query(callback_id, "Состояние сброшено, начните выбор заново")
+            return
+
         if program_index < len(filtered_programs):
-            program_id = str(filtered_programs[program_index]['tg_chat_id'])
+            program_id = str(filtered_programs.iloc[program_index]['tg_chat_id'])
             if program_id in selected_programs:
                 selected_programs.remove(program_id)
             else:
@@ -493,11 +548,23 @@ def handle_callback_query(callback_query):
 
         broadcast_text = get_user_data(user_id, "broadcast_text")
         selected_programs = get_user_data(user_id, "selected_programs", [])
-        filtered_programs = get_user_data(user_id, "filtered_programs")
+        filtered_programs = get_filtered_programs(user_id)
+
+        if filtered_programs is None or filtered_programs.empty:
+            clear_user_state(user_id)
+            set_user_state(user_id, STATE_LEVEL_SELECTION)
+            keyboard = create_level_keyboard()
+            text = (
+                "Не получилось восстановить список программ для подтверждения. "
+                "Выберите уровень и соберите рассылку заново."
+            )
+            edit_message_text(chat_id, message_id, text, keyboard)
+            answer_callback_query(callback_id, "Состояние рассылки сброшено")
+            return
 
         # Create final confirmation text
         selected_program_names = []
-        for program in filtered_programs:
+        for _, program in filtered_programs.iterrows():
             if str(program['tg_chat_id']) in selected_programs:
                 selected_program_names.append(f"• {program['program']} ({program['level']})")
 
@@ -510,11 +577,23 @@ def handle_callback_query(callback_query):
         # Start the broadcast
         broadcast_text = get_user_data(user_id, "broadcast_text")
         selected_programs = get_user_data(user_id, "selected_programs", [])
-        filtered_programs = get_user_data(user_id, "filtered_programs")
+        filtered_programs = get_filtered_programs(user_id)
+
+        if filtered_programs is None or filtered_programs.empty:
+            clear_user_state(user_id)
+            set_user_state(user_id, STATE_LEVEL_SELECTION)
+            keyboard = create_level_keyboard()
+            text = (
+                "Не получилось восстановить список программ для отправки. "
+                "Выберите уровень и соберите рассылку заново."
+            )
+            edit_message_text(chat_id, message_id, text, keyboard)
+            answer_callback_query(callback_id, "Состояние рассылки сброшено")
+            return
 
         # Create list of selected chat IDs
         selected_chat_ids = []
-        for program in filtered_programs:
+        for _, program in filtered_programs.iterrows():
             if str(program['tg_chat_id']) in selected_programs:
                 selected_chat_ids.append(program['tg_chat_id'])
 
@@ -581,8 +660,20 @@ def handle_callback_query(callback_query):
 
     elif data == "back_to_programs":
         set_user_state(user_id, STATE_PROGRAM_CONFIRMATION)
-        filtered_programs = get_user_data(user_id, "filtered_programs")
+        filtered_programs = get_filtered_programs(user_id)
         selected_programs = set(get_user_data(user_id, "selected_programs", []))
+
+        if filtered_programs is None or filtered_programs.empty:
+            clear_user_state(user_id)
+            set_user_state(user_id, STATE_LEVEL_SELECTION)
+            keyboard = create_level_keyboard()
+            text = (
+                "Список программ недоступен после перезапуска. "
+                "Пожалуйста, начните выбор заново с уровня программ."
+            )
+            edit_message_text(chat_id, message_id, text, keyboard)
+            answer_callback_query(callback_id, "Состояние рассылки сброшено")
+            return
 
         keyboard = create_program_list_keyboard(filtered_programs, selected_programs)
         text = "Выберите программы для рассылки (нажмите на программу, чтобы включить/выключить):"
