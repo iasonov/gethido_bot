@@ -224,7 +224,7 @@ def create_program_list_keyboard(programs, selected_programs):
     """Create keyboard for program selection with toggle buttons"""
     keyboard = []
 
-    for i, program in enumerate(programs):
+    for i, program in programs.iterrows():
         program_id = str(program['tg_chat_id'])
         is_selected = program_id in selected_programs
         icon = "✅" if is_selected else "❌"
