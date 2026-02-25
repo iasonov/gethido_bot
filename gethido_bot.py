@@ -156,6 +156,8 @@ def load_programs():
     programs = None
     try:
         programs = pd.read_csv(PROGRAMS_CSV_FILE, sep=";")
+        programs['tg_chat_id'] = programs['tg_chat_id'].fillna(0)  # Fill NaN with 0 for tg_chat_id
+        programs['tg_chat_id'] = programs['tg_chat_id'].astype(int)  # Ensure tg_chat_id is integer
     except Exception as e:
         print(f"Error loading programs: {e}")
     # programs = []
@@ -175,7 +177,7 @@ def filter_programs(programs, level=None, partner_filter=None, campus_filter=Non
 
     # Filter by level
     if level and level != 'all': # master of bachelor
-        filtered = filtered[filtered['level'] == level[6:]]
+        filtered = filtered[filtered['level'] == level]
     #    filtered = [p for p in filtered if p['level'] == level[6:]] # first letters "level_" doesn't count
 
     # Filter by partner status
@@ -373,18 +375,18 @@ def forward_message(chat_id, from_chat_id, message_id):
     return True
 
 
-def load_chat_ids():
-    if not os.path.exists(CHAT_IDS_FILE):
-        return set()
-    with open(CHAT_IDS_FILE, "r", encoding="utf-8", errors="ignore") as f:
-        return set(line.strip()[: line.strip().find(" ")] for line in f if line.strip())
+# def load_chat_ids():
+#     if not os.path.exists(CHAT_IDS_FILE):
+#         return set()
+#     with open(CHAT_IDS_FILE, "r", encoding="utf-8", errors="ignore") as f:
+#         return set(line.strip()[: line.strip().find(" ")] for line in f if line.strip())
 
 
-def save_chat_id(chat_id):
-    chat_ids = load_chat_ids()
-    if chat_id not in chat_ids:
-        with open(CHAT_IDS_FILE, "a") as f:
-            f.write(f"{chat_id}\n")
+# def save_chat_id(chat_id):
+#     chat_ids = load_chat_ids()
+#     if chat_id not in chat_ids:
+#         with open(CHAT_IDS_FILE, "a") as f:
+#             f.write(f"{chat_id}\n")
 
 
 # def apply_markdown_entities(text, entities):
@@ -504,14 +506,20 @@ def handle_callback_query(callback_query):
         programs = load_programs()
         filtered_programs = filter_programs(programs, level, partner_filter, campus_filter, earlyinvitation_filter)
 
-        # Initialize all programs as selected
-        selected_programs = set([str(p['tg_chat_id']) for _, p in filtered_programs.iterrows()])
-        set_user_data(user_id, "filtered_programs", serialize_filtered_programs(filtered_programs))
-        set_user_data(user_id, "selected_programs", list(selected_programs))
+        if filtered_programs is None or filtered_programs.empty:
+            set_user_state(user_id, STATE_EARLYINVITATION_SELECTION)
+            keyboard = create_earlyinvitation_keyboard()
+            text = "По вашим параметрам нет программ для рассылки - настройте фильтры заново.\nВыберите статус участия программы в раннем приглашении или вернитесь назад и настройте предыдущие фильтры:"
+            edit_message_text(chat_id, message_id, text, keyboard)
+        else:
+            # Initialize all programs as selected
+            selected_programs = set([str(p['tg_chat_id']) for _, p in filtered_programs.iterrows()])
+            set_user_data(user_id, "filtered_programs", serialize_filtered_programs(filtered_programs))
+            set_user_data(user_id, "selected_programs", list(selected_programs))
 
-        keyboard = create_program_list_keyboard(filtered_programs, selected_programs)
-        text = "Финально выберите программы для рассылки (нажмите на программу, чтобы включить/выключить):"
-        edit_message_text(chat_id, message_id, text, keyboard)
+            keyboard = create_program_list_keyboard(filtered_programs, selected_programs)
+            text = "Финально выберите программы для рассылки (нажмите на программу, чтобы включить/выключить):"
+            edit_message_text(chat_id, message_id, text, keyboard)
 
     elif data.startswith("toggle_program_"):
         program_index = int(data.replace("toggle_program_", ""))
@@ -520,14 +528,14 @@ def handle_callback_query(callback_query):
 
         if filtered_programs is None or filtered_programs.empty:
             clear_user_state(user_id)
-            set_user_state(user_id, STATE_LEVEL_SELECTION)
-            keyboard = create_level_keyboard()
+            set_user_state(user_id, STATE_WAITING_FOR_TEXT)
+            keyboard = [] # create_level_keyboard()
             text = (
                 "Похоже, сохраненное состояние рассылки потерялось после перезапуска. "
-                "Давайте начнем заново: выберите уровень программ."
+                "Давайте начнем заново: введите сообщение."
             )
             edit_message_text(chat_id, message_id, text, keyboard)
-            answer_callback_query(callback_id, "Состояние сброшено, начните выбор заново")
+            answer_callback_query(callback_id, "Состояние сброшено, начните заново")
             return
 
         if program_index < len(filtered_programs):
@@ -552,14 +560,14 @@ def handle_callback_query(callback_query):
 
         if filtered_programs is None or filtered_programs.empty:
             clear_user_state(user_id)
-            set_user_state(user_id, STATE_LEVEL_SELECTION)
-            keyboard = create_level_keyboard()
+            set_user_state(user_id, STATE_WAITING_FOR_TEXT)
+            keyboard = [] # create_level_keyboard()
             text = (
-                "Не получилось восстановить список программ для подтверждения. "
-                "Выберите уровень и соберите рассылку заново."
+                "Похоже, сохраненное состояние рассылки потерялось после перезапуска. "
+                "Давайте начнем заново: введите сообщение."
             )
             edit_message_text(chat_id, message_id, text, keyboard)
-            answer_callback_query(callback_id, "Состояние рассылки сброшено")
+            answer_callback_query(callback_id, "Состояние сброшено, начните заново")
             return
 
         # Create final confirmation text
@@ -581,14 +589,14 @@ def handle_callback_query(callback_query):
 
         if filtered_programs is None or filtered_programs.empty:
             clear_user_state(user_id)
-            set_user_state(user_id, STATE_LEVEL_SELECTION)
-            keyboard = create_level_keyboard()
+            set_user_state(user_id, STATE_WAITING_FOR_TEXT)
+            keyboard = [] # create_level_keyboard()
             text = (
-                "Не получилось восстановить список программ для отправки. "
-                "Выберите уровень и соберите рассылку заново."
+                "Похоже, сохраненное состояние рассылки потерялось после перезапуска. "
+                "Давайте начнем заново: введите сообщение."
             )
             edit_message_text(chat_id, message_id, text, keyboard)
-            answer_callback_query(callback_id, "Состояние рассылки сброшено")
+            answer_callback_query(callback_id, "Состояние сброшено, начните заново")
             return
 
         # Create list of selected chat IDs
@@ -665,14 +673,14 @@ def handle_callback_query(callback_query):
 
         if filtered_programs is None or filtered_programs.empty:
             clear_user_state(user_id)
-            set_user_state(user_id, STATE_LEVEL_SELECTION)
-            keyboard = create_level_keyboard()
+            set_user_state(user_id, STATE_WAITING_FOR_TEXT)
+            keyboard = [] # create_level_keyboard()
             text = (
-                "Список программ недоступен после перезапуска. "
-                "Пожалуйста, начните выбор заново с уровня программ."
+                "Похоже, сохраненное состояние рассылки потерялось после перезапуска. "
+                "Давайте начнем заново: введите сообщение."
             )
             edit_message_text(chat_id, message_id, text, keyboard)
-            answer_callback_query(callback_id, "Состояние рассылки сброшено")
+            answer_callback_query(callback_id, "Состояние сброшено, начните заново")
             return
 
         keyboard = create_program_list_keyboard(filtered_programs, selected_programs)
