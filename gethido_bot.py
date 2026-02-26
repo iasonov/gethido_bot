@@ -13,14 +13,15 @@ from my_secrets import BOT_TOKEN
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 ADMIN_IDS = [
     211570366,  # Игорь Асонов
+    5037998042  # Эдгар
     # 517348694,  # Мария Рыбалко
     # 189526817,  # Алена Абрамова
     # 1172339189,  # Елизавета Павлова
     # 196962881,  # Виктория Оськина
     # 300247573,  # Олеся Карпова
-    # 403700929,
-]  # Екатерина Каляева
-# Вставь свои Telegram user_id
+    # 403700929, # Екатерина Каляева
+]  
+# Telegram user_id администраторов бота.
 
 PROGRAMS_CSV_FILE = "programs.csv"
 LOG_FILE = "logs.txt"
@@ -128,7 +129,7 @@ def get_user_state(user_id):
 def clear_user_state(user_id):
     """Clear user state and data"""
     user_id_str = str(user_id)
-    if user_id_str in user_states: # TODO should be user_data?
+    if user_id_str in user_states:
         del user_states[user_id_str]
     if user_id_str in user_data:
         del user_data[user_id_str]
@@ -160,14 +161,7 @@ def load_programs():
         programs['tg_chat_id'] = programs['tg_chat_id'].astype(int)  # Ensure tg_chat_id is integer
     except Exception as e:
         print(f"Error loading programs: {e}")
-    # programs = []
-    # try:
-    #     with open(PROGRAMS_CSV_FILE, 'r', encoding='utf-8') as f:
-    #         reader = csv.DictReader(f)
-    #         for row in reader:
-    #             programs.append(row)
-    # except Exception as e:
-    #     print(f"Error loading programs: {e}")
+
     return programs
 
 
@@ -178,43 +172,34 @@ def filter_programs(programs, level=None, partner_filter=None, campus_filter=Non
     # Filter by level
     if level and level != 'all': # master of bachelor
         filtered = filtered[filtered['level'] == level]
-    #    filtered = [p for p in filtered if p['level'] == level[6:]] # first letters "level_" doesn't count
 
     # Filter by partner status
     if partner_filter and partner_filter != 'all':
         if partner_filter == 'partner_no_partners':
             filtered = filtered[filtered['partner'] == 'нет']
-        #    filtered = [p for p in filtered if p['partner'] == 'нет']
         elif partner_filter == 'partner_no_netology':
             filtered = filtered[filtered['partner'] == 'Нетология']   
-        #    filtered = [p for p in filtered if p['partner'] != 'Нетология']
         elif partner_filter == 'partner_no_carpovcourses':
             filtered = filtered[filtered['partner'] == 'Карпов Курсы']  
-        #    filtered = [p for p in filtered if p['partner'] != 'Карпов Курсы']
 
     # Filter by campus
     if campus_filter and campus_filter != 'all':
         if campus_filter == 'msk':
             filtered = filtered[filtered['campus'] == 'Москва']
-        #    filtered = [p for p in filtered if p['campus'].startswith('Москва')]
         elif campus_filter == 'nn':
             filtered = filtered[filtered['campus'] == 'Нижний Новгород']
-        #    filtered = [p for p in filtered if p['campus'].startswith('Нижний Новгород')]
         elif campus_filter == 'perm':
             filtered = filtered[filtered['campus'] == 'Пермь']
-        #    filtered = [p for p in filtered if p['campus'].startswith('Пермь')]
         elif campus_filter == 'spb':
             filtered = filtered[filtered['campus'] == 'Санкт-Петербург']
-        #    filtered = [p for p in filtered if p['campus'].startswith('Санкт-Петербург')]
+
 
     # Filter by early invitation status
     if earlyinvitation_filter and earlyinvitation_filter != 'all':
         if earlyinvitation_filter == 'no':
             filtered = filtered[filtered['early_invitation'] == 'нет']
-        #    filtered = [p for p in filtered if p['early_invitation'] == 'нет']
         elif earlyinvitation_filter == 'yes':
             filtered = filtered[filtered['early_invitation'] == 'да']
-        #    filtered = [p for p in filtered if p['early_invitation'] != 'да']
 
     return filtered
 
@@ -307,8 +292,8 @@ def log_broadcast(sender_name, message_text, chats=None):
                         f.write(line)
             except Exception:
                 f.write(f"Chats file {chats} cannot be opened\n\n")
-        else:
-            f.write("No chats file provided for logging\n\n")
+        # else:
+        #     f.write("No chats file provided for logging\n\n")
         f.write("-----------------------------------------\n\n")
 
 
@@ -373,58 +358,6 @@ def forward_message(chat_id, from_chat_id, message_id):
         print(f"Failed to forward message to {chat_id} with error: {e} and code {r.status_code}")
         return False
     return True
-
-
-# def load_chat_ids():
-#     if not os.path.exists(CHAT_IDS_FILE):
-#         return set()
-#     with open(CHAT_IDS_FILE, "r", encoding="utf-8", errors="ignore") as f:
-#         return set(line.strip()[: line.strip().find(" ")] for line in f if line.strip())
-
-
-# def save_chat_id(chat_id):
-#     chat_ids = load_chat_ids()
-#     if chat_id not in chat_ids:
-#         with open(CHAT_IDS_FILE, "a") as f:
-#             f.write(f"{chat_id}\n")
-
-
-# def apply_markdown_entities(text, entities):
-#     result = text
-#     shift = 0
-#     # TODO there are problems in case of same offset (example: bold inside link)
-#     for e in sorted(entities, key=lambda x: x["offset"] + x["length"]):
-#         start = e["offset"]
-#         end = start + e["length"]
-#         t = text[start:end]
-
-#         if e["type"] == "bold":
-#             wrap = f"*{t}*"
-#             delta_shift = len(wrap) - len(t)
-#             shift += delta_shift
-#         elif e["type"] == "italic":
-#             wrap = f"_{t}_"
-#             delta_shift = len(wrap) - len(t)
-#             shift += delta_shift
-#         elif e["type"] == "code":
-#             wrap = f"`{t}`"
-#             delta_shift = len(wrap) - len(t)
-#             shift += delta_shift
-#         elif e["type"] == "text_link":
-#             wrap = f"[{t}]({e['url']})"
-#             delta_shift = len(wrap) - len(t)
-#             shift += delta_shift
-#         else:
-#             continue
-
-#         result = (
-#             result[: start + shift - delta_shift]
-#             + wrap
-#             + result[end + shift - delta_shift :]
-#         )
-#     #
-
-#     return result
 
 
 def answer_callback_query(callback_query_id, text=None):
@@ -598,12 +531,11 @@ def handle_callback_query(callback_query):
             edit_message_text(chat_id, message_id, text, keyboard)
             answer_callback_query(callback_id, "Состояние сброшено, начните заново")
             return
+        else:
+            keyboard = []
+            text = ("Начинаю рассылку... Это может занять некоторое время, пожалуйста, не пишите ничего боту.")
+            edit_message_text(chat_id, message_id, text, keyboard)
 
-        # Create list of selected chat IDs
-        selected_chat_ids = []
-        for _, program in filtered_programs.iterrows():
-            if str(program['tg_chat_id']) in selected_programs:
-                selected_chat_ids.append(program['tg_chat_id'])
 
         # Get original message for forwarding
         original_message_id = get_user_data(user_id, "original_message_id")
@@ -611,15 +543,25 @@ def handle_callback_query(callback_query):
         # Clear user state
         clear_user_state(user_id)
 
-        # Send broadcast
+
+        # Create list of selected chat IDs
         success_count = 0
-        for chat_id_to_send in selected_chat_ids:
-            if forward_message(chat_id_to_send, chat_id, original_message_id):
-                print(f"Message forwarded to {chat_id_to_send}")
-                success_count += 1
-            else:
-                print(f"Failed to forward message to {chat_id_to_send}")
-            time.sleep(DELAY)
+        count = 0
+        text = "Рассылка запущена. Подождите и не отправляйте сообщения боту.\nОтправка сообщений в группы:\n"
+        keyboard = []
+        for _, program in filtered_programs.iterrows():
+            if str(program['tg_chat_id']) in selected_programs:
+                count += 1
+                chat_id_to_send = int(program['tg_chat_id'])
+                if forward_message(chat_id_to_send, chat_id, original_message_id):
+                    text += f"✅ {program['program']} ({program['level']})\n"
+                    print(f"Message forwarded to {chat_id_to_send}")
+                    success_count += 1
+                else:
+                    text += f"❌ {program['program']} ({program['level']})\n"
+                    print(f"Failed to forward message to {chat_id_to_send}")
+                edit_message_text(chat_id, message_id, text, keyboard)
+                time.sleep(DELAY)            
 
         # Send summary to all admins
         user = callback_query["from"]
@@ -631,15 +573,15 @@ def handle_callback_query(callback_query):
         if username:
             sender_name += f" (@{username})"
 
-        summary_text = f"*Рассылка завершена*\n\n*Отправитель:* {sender_name}\n*Отправлено:* {success_count} из {len(selected_chat_ids)}\n\n*Текст:*\n{broadcast_text}"
+        summary_text = f"*Отправитель:* {sender_name}\n*Отправлено:* {success_count} из {count}\n\n*Текст:*\n{broadcast_text}"
 
         for admin_id in ADMIN_IDS:
             send_message(admin_id, summary_text)
 
         # Log broadcast
-        log_broadcast(sender_name, broadcast_text)
+        log_broadcast(sender_name, broadcast_text + '\n\n' + text)
 
-        edit_message_text(chat_id, message_id, f"✅ Рассылка завершена! Отправлено в {success_count} чатов.")
+        edit_message_text(chat_id, message_id, f"*Рассылка завершена!* Отправлено в в чаты:\n{text}")
 
     # Handle back navigation
     elif data == "back_to_level":
