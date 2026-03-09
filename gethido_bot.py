@@ -20,7 +20,7 @@ ADMIN_IDS = [
     # 196962881,  # Виктория Оськина
     # 300247573,  # Олеся Карпова
     # 403700929, # Екатерина Каляева
-]  
+]
 # Telegram user_id администраторов бота.
 
 PROGRAMS_CSV_FILE = "programs.csv"
@@ -175,12 +175,12 @@ def filter_programs(programs, level=None, partner_filter=None, campus_filter=Non
 
     # Filter by partner status
     if partner_filter and partner_filter != 'all':
-        if partner_filter == 'partner_no_partners':
+        if partner_filter == 'no_partners':
             filtered = filtered[filtered['partner'] == 'нет']
-        elif partner_filter == 'partner_no_netology':
-            filtered = filtered[filtered['partner'] == 'Нетология']   
-        elif partner_filter == 'partner_no_carpovcourses':
-            filtered = filtered[filtered['partner'] == 'Карпов Курсы']  
+        elif partner_filter == 'no_netology':
+            filtered = filtered[filtered['partner'] == 'Нетология']
+        elif partner_filter == 'no_carpovcourses':
+            filtered = filtered[filtered['partner'] == 'Карпов Курсы']
 
     # Filter by campus
     if campus_filter and campus_filter != 'all':
@@ -435,7 +435,7 @@ def handle_callback_query(callback_query):
         partner_filter = get_user_data(user_id, "partner_filter")
         campus_filter = get_user_data(user_id, "campus_filter")
         earlyinvitation_filter = get_user_data(user_id, "earlyinvitation_filter")
-        
+
         programs = load_programs()
         filtered_programs = filter_programs(programs, level, partner_filter, campus_filter, earlyinvitation_filter)
 
@@ -561,7 +561,7 @@ def handle_callback_query(callback_query):
                     text += f"❌ {program['program']} ({program['level']})\n"
                     print(f"Failed to forward message to {chat_id_to_send}")
                 edit_message_text(chat_id, message_id, text, keyboard)
-                time.sleep(DELAY)            
+                time.sleep(DELAY)
 
         # Send summary to all admins
         user = callback_query["from"]
@@ -699,7 +699,7 @@ def main():
                             broadcast_text = text
                             set_user_data(user_id, "broadcast_text", broadcast_text)
                             set_user_data(user_id, "original_message_id", message["message_id"])
-                            
+
                             set_user_state(user_id, STATE_LEVEL_SELECTION)
 
                             keyboard = create_level_keyboard()
