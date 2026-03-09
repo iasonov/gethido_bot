@@ -178,9 +178,9 @@ def filter_programs(programs, level=None, partner_filter=None, campus_filter=Non
         if partner_filter == 'no_partners':
             filtered = filtered[filtered['partner'] == 'нет']
         elif partner_filter == 'no_netology':
-            filtered = filtered[filtered['partner'] == 'Нетология']
+            filtered = filtered[filtered['partner'] != 'Нетология']
         elif partner_filter == 'no_carpovcourses':
-            filtered = filtered[filtered['partner'] == 'Карпов Курсы']
+            filtered = filtered[filtered['partner'] != 'Карпов Курсы']
 
     # Filter by campus
     if campus_filter and campus_filter != 'all':
