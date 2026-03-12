@@ -383,6 +383,12 @@ def edit_message_text(chat_id, message_id, text, keyboard=None, markdown="Markdo
     response = requests.post(url, data=data, timeout=DELAY)
     return response.json()
 
+def escape_markdown(text):
+    """Экранирует специальные символы Markdown."""
+    escape_chars = ['_', '*', '[', ']', '`']  # Для старого Markdown достаточно этих
+    for ch in escape_chars:
+        text = text.replace(ch, '\\' + ch)
+    return text
 
 def handle_callback_query(callback_query):
     """Handle callback query from inline keyboards"""
@@ -509,7 +515,7 @@ def handle_callback_query(callback_query):
             if str(program['tg_chat_id']) in selected_programs:
                 selected_program_names.append(f"• {program['program']} ({program['level']})")
 
-        confirmation_text = f"*Подтверждение рассылки*\n\n*Текст:*\n{broadcast_text}\n\n*Программы (всего: {len(selected_program_names)}):*\n" + "\n".join(selected_program_names)
+        confirmation_text = f"*Подтверждение рассылки*\n\n*Текст:*\n{escape_markdown(broadcast_text)}\n\n*Программы (всего: {len(selected_program_names)}):*\n" + "\n".join(selected_program_names)
 
         keyboard = create_final_confirmation_keyboard()
         edit_message_text(chat_id, message_id, confirmation_text, keyboard)
