@@ -13,17 +13,17 @@ from my_secrets import BOT_TOKEN
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/"
 ADMIN_IDS = [
     211570366,  # Игорь Асонов
-    5037998042  # Эдгар
+    5037998042,  # Эдгар
     # 517348694,  # Мария Рыбалко
     # 189526817,  # Алена Абрамова
     # 1172339189,  # Елизавета Павлова
-    # 196962881,  # Виктория Оськина
+    196962881  # Виктория Оськина
     # 300247573,  # Олеся Карпова
     # 403700929, # Екатерина Каляева
 ]
 # Telegram user_id администраторов бота.
 
-PROGRAMS_CSV_FILE = "programs.csv"
+PROGRAMS_CSV_FILE = "programs_real.csv"
 LOG_FILE = "logs.txt"
 STATE_FILE = "user_states.json"
 STATE_BACKUP_FILE = "user_states.json.bak"
