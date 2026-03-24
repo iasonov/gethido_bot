@@ -17,17 +17,18 @@ ADMIN_IDS = [
     # 517348694,  # Мария Рыбалко
     # 189526817,  # Алена Абрамова
     # 1172339189,  # Елизавета Павлова
-    196962881  # Виктория Оськина
+    # 196962881,  # Виктория Оськина
     # 300247573,  # Олеся Карпова
     # 403700929, # Екатерина Каляева
 ]
 # Telegram user_id администраторов бота.
 
-PROGRAMS_CSV_FILE = "programs.csv"
+PROGRAMS_CSV_FILE = "programs_real.csv"
 LOG_FILE = "logs.txt"
 STATE_FILE = "user_states.json"
 STATE_BACKUP_FILE = "user_states.json.bak"
 DELAY = 10
+MAX_ATTEMPTS = 3
 
 # Состояния пользователя
 STATE_WAITING_FOR_TEXT = "waiting_for_text"
@@ -351,11 +352,11 @@ def forward_message(chat_id, from_chat_id, message_id):
     url = API_URL + "copyMessage"
     data = {"chat_id": chat_id, "from_chat_id": from_chat_id, "message_id": message_id}
     header = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
-    attempts = 0
-    while attempts < 2:
+    attempts = 1
+    while attempts <= MAX_ATTEMPTS:
         r = None
         try:
-            r = requests.post(url, data=data, timeout=DELAY, headers=header)
+            r = requests.post(url, data=data, timeout=DELAY * attempts, headers=header)
             if r.status_code != requests.codes.ok:
                 print(f"Failed to forward message to {chat_id} with code {r.status_code}")
                 return False
@@ -363,8 +364,9 @@ def forward_message(chat_id, from_chat_id, message_id):
         except requests.exceptions.Timeout as e:
             attempts += 1
             print(f"Timeout while forwarding message to {chat_id}: {e}")
-            if attempts < 2:
-                time.sleep(DELAY)
+            if attempts <= MAX_ATTEMPTS:
+                print(f"Retrying in {DELAY * attempts} seconds... (Attempt {attempts}/{MAX_ATTEMPTS})")
+                time.sleep(DELAY * attempts)
                 continue
             return False
         except requests.exceptions.RequestException as e:
