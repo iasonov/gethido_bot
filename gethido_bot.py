@@ -23,7 +23,7 @@ ADMIN_IDS = [
 ]
 # Telegram user_id администраторов бота.
 
-PROGRAMS_CSV_FILE = "programs_real.csv"
+PROGRAMS_CSV_FILE = "programs.csv"
 LOG_FILE = "logs.txt"
 STATE_FILE = "user_states.json"
 STATE_BACKUP_FILE = "user_states.json.bak"
@@ -157,8 +157,10 @@ def load_programs():
     programs = None
     try:
         programs = pd.read_csv(PROGRAMS_CSV_FILE, sep=";")
-        programs['tg_chat_id'] = programs['tg_chat_id'].fillna(0)  # Fill NaN with 0 for tg_chat_id
-        programs['tg_chat_id'] = programs['tg_chat_id'].astype(int)  # Ensure tg_chat_id is integer
+        programs['tg_chat_id'] = pd.to_numeric(programs['tg_chat_id'], errors='coerce')
+        programs = programs.dropna(subset=['tg_chat_id'])
+        programs['tg_chat_id'] = programs['tg_chat_id'].astype(int)
+        programs = programs[programs['tg_chat_id'] != 0].copy()
     except Exception as e:
         print(f"Error loading programs: {e}")
 
@@ -349,15 +351,26 @@ def forward_message(chat_id, from_chat_id, message_id):
     url = API_URL + "copyMessage"
     data = {"chat_id": chat_id, "from_chat_id": from_chat_id, "message_id": message_id}
     header = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
-    try:
-        r = requests.post(url, data=data, timeout=DELAY, headers=header)
-        if r.status_code != requests.codes.ok:
-            print(f"Failed to forward message to {chat_id} with code {r.status_code}")
+    attempts = 0
+    while attempts < 2:
+        r = None
+        try:
+            r = requests.post(url, data=data, timeout=DELAY, headers=header)
+            if r.status_code != requests.codes.ok:
+                print(f"Failed to forward message to {chat_id} with code {r.status_code}")
+                return False
+            return True
+        except requests.exceptions.Timeout as e:
+            attempts += 1
+            print(f"Timeout while forwarding message to {chat_id}: {e}")
+            if attempts < 2:
+                time.sleep(DELAY)
+                continue
             return False
-    except requests.exceptions.RequestException as e:
-        print(f"Failed to forward message to {chat_id} with error: {e} and code {r.status_code}")
-        return False
-    return True
+        except requests.exceptions.RequestException as e:
+            status_code = r.status_code if r is not None else "no response"
+            print(f"Failed to forward message to {chat_id} with error: {e} and code {status_code}")
+            return False
 
 
 def answer_callback_query(callback_query_id, text=None):
