@@ -177,3 +177,5 @@ cython_debug/
 ~$parse_names.xlsx
 *.swp
 user_states.json
+output/
+data/sop_history/
