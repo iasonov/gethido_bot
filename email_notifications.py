@@ -10,19 +10,49 @@ import ssl
 import time
 from email.message import EmailMessage
 from email.utils import formataddr
+from io import BytesIO
 from pathlib import Path
 from typing import TypedDict
 
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    ListFlowable,
+    ListItem,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
+
 from program_contacts import ProgramContact
-from sop_analysis import DisciplineSummary, ProgramSummary, RowIssue
+from sop_analysis import (
+    STATUS_ALARM,
+    STATUS_RISK,
+    DisciplineSummary,
+    ProgramSummary,
+    RowIssue,
+)
 
 
 PERMANENT_CC_EMAILS: tuple[str, ...] = ("yremezova@hse.ru", "ekalyaeva@hse.ru")
 DEFAULT_MODULE_LABEL = "3 модуль 2025/2026"
+PDF_FONT_CANDIDATE_PATHS: tuple[Path, ...] = (
+    Path(r"C:\Windows\Fonts\arial.ttf"),
+    Path(r"C:\Windows\Fonts\calibri.ttf"),
+    Path(r"C:\Windows\Fonts\times.ttf"),
+    Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+    Path("/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"),
+)
+PDF_FONT_NAME = "SOPNotificationFont"
 
 
 class EmailNotificationError(RuntimeError):
-    """Raised when notification email generation or sending fails."""
+    """Ошибка, возникающая при проблемах в генерации или отправке писем."""
 
 
 class SmtpConfig(TypedDict):
@@ -110,6 +140,15 @@ def unique_emails(emails: list[str]) -> list[str]:
     return result
 
 
+def severity_rank(status: str) -> int:
+    """Возвращает числовое значение для сортировки по критичности ситуации."""
+    if status == STATUS_ALARM:
+        return 0
+    if status == STATUS_RISK:
+        return 1
+    return 2
+
+
 def get_program_disciplines(
     program: str,
     discipline_summaries: list[DisciplineSummary],
@@ -118,13 +157,20 @@ def get_program_disciplines(
     disciplines = [
         discipline for discipline in discipline_summaries if discipline["program"] == program
     ]
-    return sorted(disciplines, key=lambda item: (item["status"], item["min_score"]))
+    return sorted(disciplines, key=lambda item: (severity_rank(item["status"]), item["min_score"]))
 
 
 def get_program_row_issues(program: str, row_issues: list[RowIssue]) -> list[RowIssue]:
     """Возвращает проблемные строки выбранной программы, отсортированные по риску."""
     issues = [issue for issue in row_issues if issue["program"] == program]
-    return sorted(issues, key=lambda item: (item["status"], item["min_score"], item["discipline"]))
+    return sorted(
+        issues,
+        key=lambda item: (
+            severity_rank(item["status"]),
+            item["min_score"],
+            item["discipline"],
+        ),
+    )
 
 
 def format_metric_issues(issue: RowIssue) -> str:
@@ -138,6 +184,194 @@ def build_subject(program_summary: ProgramSummary, module_label: str) -> str:
     return f"[СОП] {program_summary['status']}: {program_summary['program']}, {module_label}"
 
 
+def build_attachment_file_name(program_name: str, module_label: str) -> str:
+    """Создает безопасное название PDF-файла"""
+    safe_program = "".join(character if character.isalnum() else "_" for character in program_name)
+    safe_module_label = "".join(
+        character if character.isalnum() else "_" for character in module_label
+    )
+    return f"{safe_program}_{safe_module_label}.pdf"
+
+
+def select_disciplines_by_status(
+    disciplines: list[DisciplineSummary],
+    status: str,
+) -> list[DisciplineSummary]:
+    """Фильтрует дисциплины по статусу."""
+    return [discipline for discipline in disciplines if discipline["status"] == status]
+
+
+def build_discipline_row_html(discipline: DisciplineSummary) -> str:
+    """Формирует одну строку HTML для таблицы дисциплин."""
+    return (
+        "<tr>"
+        f"<td>{html.escape(discipline['discipline'])}</td>"
+        f"<td>{discipline['min_score']:.2f}</td>"
+        "</tr>"
+    )
+
+
+def build_issue_row_html(issue: RowIssue) -> str:
+    """Формирует одну строку HTML для таблицы дисциплин в приложении."""
+    return (
+        "<tr>"
+        f"<td>{html.escape(issue['discipline'])}</td>"
+        f"<td>{html.escape(issue['teacher'])}</td>"
+        f"<td>{html.escape(issue['status'])}</td>"
+        f"<td>{html.escape(format_metric_issues(issue))}</td>"
+        "</tr>"
+    )
+
+
+def build_text_discipline_section(
+    title: str,
+    explanation: str,
+    disciplines: list[DisciplineSummary],
+) -> list[str]:
+    """Создает одну текстовую секцию с заголовком, пояснение и буллетами."""
+    lines: list[str] = [title, explanation]
+    if disciplines:
+        for discipline in disciplines:
+            lines.append(
+                f"- {discipline['discipline']}: минимальная оценка {discipline['min_score']:.2f}"
+            )
+    else:
+        lines.append("- Нет дисциплин, которые соответствуют этому разделу.")
+    lines.append("")
+    return lines
+
+
+def register_pdf_font() -> str:
+    """Регистрирует кириллические шрифты для генерации PDF."""
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    for font_path in PDF_FONT_CANDIDATE_PATHS:
+        if font_path.exists():
+            if PDF_FONT_NAME not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont(PDF_FONT_NAME, str(font_path)))
+            return PDF_FONT_NAME
+    raise EmailNotificationError(
+        "Unable to generate PDF attachment because no Cyrillic-capable font was found"
+    )
+
+
+def build_pdf_attachment(
+    program_summary: ProgramSummary,
+    module_label: str,
+    row_issues: list[RowIssue],
+) -> bytes:
+    """Создает приложение PDF с детализацией по преподавателям и дисциплинам."""
+    font_name = register_pdf_font()
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=18 * mm,
+        bottomMargin=18 * mm,
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "SOPTitle",
+        parent=styles["Title"],
+        fontName=font_name,
+        fontSize=16,
+        leading=20,
+        alignment=TA_LEFT,
+        spaceAfter=10,
+    )
+    heading_style = ParagraphStyle(
+        "SOPHeading",
+        parent=styles["Heading3"],
+        fontName=font_name,
+        fontSize=12,
+        leading=15,
+        spaceBefore=10,
+        spaceAfter=6,
+    )
+    body_style = ParagraphStyle(
+        "SOPBody",
+        parent=styles["BodyText"],
+        fontName=font_name,
+        fontSize=10,
+        leading=13,
+        spaceAfter=4,
+    )
+    table_style = ParagraphStyle(
+        "SOPTable",
+        parent=body_style,
+        spaceAfter=0,
+    )
+
+    story: list[object] = [
+        Paragraph(html.escape(program_summary["program"]), title_style),
+        Paragraph(f"Период: {html.escape(module_label)}", body_style),
+        Paragraph("Детали по преподавателям, дисциплинам и метрикам", heading_style),
+    ]
+
+    issue_rows: list[list[Paragraph]] = [
+        [
+            Paragraph(html.escape("Дисциплина"), table_style),
+            Paragraph(html.escape("Преподаватель"), table_style),
+            Paragraph(html.escape("Статус"), table_style),
+            Paragraph(html.escape("Метрики"), table_style),
+        ]
+    ]
+    for issue in row_issues:
+        issue_rows.append(
+            [
+                Paragraph(html.escape(issue["discipline"]), table_style),
+                Paragraph(html.escape(issue["teacher"]), table_style),
+                Paragraph(html.escape(issue["status"]), table_style),
+                Paragraph(html.escape(format_metric_issues(issue)), table_style),
+            ]
+        )
+
+    issue_table = Table(issue_rows, colWidths=[45 * mm, 45 * mm, 28 * mm, 54 * mm], repeatRows=1)
+    issue_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8eef7")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#1f2937")),
+                ("FONTNAME", (0, 0), (-1, -1), font_name),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("LEADING", (0, 0), (-1, -1), 12),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#9ca3af")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+
+    recommendation_items = ListFlowable(
+        [
+            ListItem(Paragraph("проверить дисциплины и преподавателей с оценками ниже порогов;", body_style)),
+            ListItem(Paragraph("обсудить причины низких оценок с командой программы;", body_style)),
+            ListItem(Paragraph("определить корректирующие действия по содержанию, коммуникации и организации дисциплины.", body_style)), # ,?
+        ],
+        bulletType="bullet",
+        leftIndent=12,
+    )
+
+    story.extend(
+        [
+            Spacer(1, 4),
+            issue_table,
+            Paragraph("Как может выглядеть работа на основании обратной связи", heading_style),
+            recommendation_items,
+        ]
+    )
+
+    document.build(story)
+    return buffer.getvalue()
+
+
 def build_text_body(
     program_summary: ProgramSummary,
     disciplines: list[DisciplineSummary],
@@ -145,34 +379,40 @@ def build_text_body(
     source_label: str,
     module_label: str,
 ) -> str:
-    """Формирует текстовую версию письма-оповещения без генеративного ИИ."""
+    """Формирует текстовую версию письма-оповещения"""
+    del source_label
+    del row_issues
+
+    attention_disciplines = select_disciplines_by_status(disciplines, STATUS_ALARM)
+    risk_disciplines = select_disciplines_by_status(disciplines, STATUS_RISK)
+
     lines = [
         "Добрый день!",
         "",
-        f"По итогам анализа студенческой оценки преподавания за {module_label} по программе "
-        f"«{program_summary['program']}» просим обратить внимание на дисциплины:",
-        ""
+        (
+            f"По итогам анализа студенческой оценки преподавания за {module_label} "
+            f"по программе «{program_summary['program']}» видим моменты, на которые просим обратить внимание."
+        ),
+        "",
     ]
-
-    for discipline in disciplines:
-        lines.append(
-            "- "
-            f"{discipline['discipline']}: {discipline['status']}, "
-            f"минимальная оценка {discipline['min_score']:.2f}"
+    lines.extend(
+        build_text_discipline_section(
+            "Дисциплины, требующие внимания",
+            "Хотя бы одна средняя оценка ниже 3 баллов или хотя бы две средних оценки ниже 4 баллов.",
+            attention_disciplines,
         )
-
-    lines.extend(["", "Детали по преподавателям, дисциплинам и метрикам:"])
-    for issue in row_issues:
-        teacher_text = f", преподаватель: {issue['teacher']}" if issue["teacher"] else ""
-        lines.append(
-            "- "
-            f"{issue['discipline']} ({issue['sheet']}{teacher_text}): "
-            f"{issue['status']}; {format_metric_issues(issue)}"
+    )
+    lines.extend(
+        build_text_discipline_section(
+            "Дисциплины, имеющие риски",
+            "Хотя бы одна средняя оценка ниже 4 баллов.",
+            risk_disciplines,
         )
-
+    )
     lines.extend(
         [
-            ""
+            "Подробные сведения по преподавателям, дисциплинам и метрикам приложены в PDF-файле.",
+            "",
         ]
     )
     return "\n".join(lines)
@@ -185,25 +425,24 @@ def build_html_body(
     source_label: str,
     module_label: str,
 ) -> str:
-    """Формирует HTML-версию письма-оповещения без генеративного ИИ."""
-    discipline_rows = "\n".join(
-        "<tr>"
-        f"<td>{html.escape(discipline['discipline'])}</td>"
-        f"<td>{html.escape(discipline['status'])}</td>"
-        f"<td>{discipline['min_score']:.2f}</td>"
-        "</tr>"
-        for discipline in disciplines
+    """Создает HTML версию для оптравки по электронной почте."""
+    del source_label
+
+    attention_disciplines = select_disciplines_by_status(disciplines, STATUS_ALARM)
+    risk_disciplines = select_disciplines_by_status(disciplines, STATUS_RISK)
+
+    attention_rows = "\n".join(
+        build_discipline_row_html(discipline) for discipline in attention_disciplines
     )
-    issue_rows = "\n".join(
-        "<tr>"
-        f"<td>{html.escape(issue['discipline'])}</td>"
-        f"<td>{html.escape(issue['teacher'])}</td>"
-        f"<td>{html.escape(issue['sheet'])}</td>"
-        f"<td>{html.escape(issue['status'])}</td>"
-        f"<td>{html.escape(format_metric_issues(issue))}</td>"
-        "</tr>"
-        for issue in row_issues
-    )
+    risk_rows = "\n".join(build_discipline_row_html(discipline) for discipline in risk_disciplines)
+    issue_rows = "\n".join(build_issue_row_html(issue) for issue in row_issues)
+
+    if attention_rows == "":
+        attention_rows = "<tr><td colspan=\"2\">Нет дисциплин для этого раздела.</td></tr>"
+    if risk_rows == "":
+        risk_rows = "<tr><td colspan=\"2\">Нет дисциплин для этого раздела.</td></tr>"
+    if issue_rows == "":
+        issue_rows = "<tr><td colspan=\"4\">Нет деталей по преподавателям и метрикам.</td></tr>"
 
     return f"""
 <html>
@@ -211,33 +450,42 @@ def build_html_body(
     <p>Добрый день!</p>
     <p>
       По итогам анализа студенческой оценки преподавания за {html.escape(module_label)} по программе
-      «{html.escape(program_summary['program'])}» видим моменты на которые просим обратить внимание.
+      «{html.escape(program_summary['program'])}» видим моменты, на которые просим обратить внимание.
     </p>
-    <h3>Дисциплины, на которые стоит обратить внимание</h3>
+    <h3>Дисциплины, требующие внимания</h3>
+    <p>Хотя бы одна средняя оценка ниже 3 баллов или хотя бы две средних оценки ниже 4 баллов.</p>
     <table border="1" cellpadding="6" cellspacing="0">
-      <thead><tr><th>Дисциплина</th><th>Статус</th><th>Минимальная оценка</th></tr></thead>
-      <tbody>{discipline_rows}</tbody>
+      <thead><tr><th>Дисциплина</th><th>Минимальная оценка</th></tr></thead>
+      <tbody>{attention_rows}</tbody>
     </table>
-    <h3>Детали по преподавателям, дисциплинам и метрикам</h3>
+    <h3>Дисциплины, имеющие риски</h3>
+    <p>Хотя бы одна средняя оценка ниже 4 баллов.</p>
     <table border="1" cellpadding="6" cellspacing="0">
-      <thead>
-        <tr>
-          <th>Дисциплина</th><th>Преподаватель</th><th>Источник</th><th>Статус</th><th>Метрики</th>
-        </tr>
-      </thead>
-      <tbody>{issue_rows}</tbody>
+      <thead><tr><th>Дисциплина</th><th>Минимальная оценка</th></tr></thead>
+      <tbody>{risk_rows}</tbody>
     </table>
-    <h3>На что обратить внимание</h3>
-    <ul>
-      <li>проверить дисциплины и преподавателей с оценками ниже порогов;</li>
-      <li>обсудить причины низких оценок с командой программы;</li>
-      <li>определить корректирующие действия по содержанию, коммуникации и организации курса.</li>
-    </ul>
-    <p>Источник данных: {html.escape(source_label)}</p>
+    
+    <p>Подробные сведения по преподавателям, дисциплинам и метрикам приложены в PDF-файле.</p>
   </body>
 </html>
 """.strip()
-
+# <p>Детали по преподавателям, дисциплинам и метрикам представлены в приложении.</p>
+# <h3>Детали по преподавателям, дисциплинам и метрикам</h3>
+# <table border="1" cellpadding="6" cellspacing="0">
+#   <thead>
+#     <tr>
+#       <th>Дисциплина</th><th>Преподаватель</th><th>Статус</th><th>Метрики</th>
+#     </tr>
+#   </thead>
+#   <tbody>{issue_rows}</tbody>
+# </table>
+# <h3>Как может выглядеть работа на основании обратной связи</h3>
+# <ul>
+#   <li>проверить дисциплины и преподавателей с оценками ниже порогов;</li>
+#   <li>обсудить причины низких оценок с командой программы;</li>
+#   <li>определить корректирующие действия по содержанию, коммуникации и организации дисциплины.</li>
+# </ul>
+    
 
 def build_program_notification(
     program_summary: ProgramSummary,
@@ -249,7 +497,7 @@ def build_program_notification(
     from_email: str,
     from_name: str,
 ) -> ProgramNotification:
-    """Собирает готовое письмо и списки получателей для одной программы."""
+    """Создает письмо по одной программе, готовое к отправке."""
     to_emails = unique_emails(contact["academic_lead_emails"])
     if not to_emails:
         raise EmailNotificationError(
@@ -262,6 +510,7 @@ def build_program_notification(
     disciplines = get_program_disciplines(program_summary["program"], discipline_summaries)
     issues = get_program_row_issues(program_summary["program"], row_issues)
     subject = build_subject(program_summary, module_label)
+    attachment_name = build_attachment_file_name(program_summary["program"], module_label)
 
     message = EmailMessage()
     message["Subject"] = subject
@@ -274,6 +523,12 @@ def build_program_notification(
     message.add_alternative(
         build_html_body(program_summary, disciplines, issues, source_label, module_label),
         subtype="html",
+    )
+    message.add_attachment(
+        build_pdf_attachment(program_summary, module_label, issues),
+        maintype="application",
+        subtype="pdf",
+        filename=attachment_name,
     )
 
     return {
@@ -343,15 +598,27 @@ def write_notification_previews(
     notifications: list[ProgramNotification],
     output_dir: Path,
 ) -> None:
-    """Сохраняет предпросмотр писем в формате .eml для ручной проверки."""
+    """Сохраняет PDF и предпросмотр писем в формате .eml для ручной проверки."""
     emails_dir = output_dir / "emails"
+    pdfs_dir = output_dir / "pdfs"
     emails_dir.mkdir(parents=True, exist_ok=True)
+    pdfs_dir.mkdir(parents=True, exist_ok=True)
+
     for index, notification in enumerate(notifications, start=1):
         safe_program = "".join(
             character if character.isalnum() else "_" for character in notification["program"]
         )
         path = emails_dir / f"{index:03d}_{safe_program}.eml"
         path.write_bytes(bytes(notification["message"]))
+
+        for attachment in notification["message"].iter_attachments():
+            filename = attachment.get_filename()
+            if filename is None:
+                continue
+            payload = attachment.get_payload(decode=True)
+            if payload is None:
+                continue
+            (pdfs_dir / filename).write_bytes(payload)
 
 
 def write_recipients_csv(

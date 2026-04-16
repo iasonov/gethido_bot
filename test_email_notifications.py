@@ -13,19 +13,19 @@ from sop_analysis import DisciplineSummary, ProgramSummary, RowIssue
 
 
 def build_program_summary() -> ProgramSummary:
-    """Возвращает тестовую сводку по программе."""
+    """Return a test program summary."""
     return {
         "program": "Финансы",
         "status": "Есть риски",
         "alarm_discipline_count": 1,
-        "risk_discipline_count": 0,
-        "issue_count": 1,
-        "min_score": 2.9,
+        "risk_discipline_count": 1,
+        "issue_count": 2,
+        "min_score": 2.5,
     }
 
 
 def build_contact() -> ProgramContact:
-    """Возвращает тестовые контакты программы."""
+    """Return test contact data."""
     return {
         "program": "Финансы",
         "academic_lead_emails": ["lead@hse.ru"],
@@ -36,7 +36,7 @@ def build_contact() -> ProgramContact:
 
 
 def build_discipline_summary() -> DisciplineSummary:
-    """Возвращает тестовую сводку по дисциплине."""
+    """Return a test discipline summary for the attention block."""
     return {
         "program": "Финансы",
         "discipline": "Курс 1",
@@ -44,12 +44,25 @@ def build_discipline_summary() -> DisciplineSummary:
         "issue_count": 1,
         "alarm_issue_count": 1,
         "risk_issue_count": 0,
-        "min_score": 2.9,
+        "min_score": 2.5,
+    }
+
+
+def build_risk_discipline_summary() -> DisciplineSummary:
+    """Return a test discipline summary for the risk block."""
+    return {
+        "program": "Финансы",
+        "discipline": "Курс 2",
+        "status": "Есть риски",
+        "issue_count": 1,
+        "alarm_issue_count": 0,
+        "risk_issue_count": 1,
+        "min_score": 3.8,
     }
 
 
 def build_row_issue() -> RowIssue:
-    """Возвращает тестовую проблемную строку СОП."""
+    """Return a test SOP issue row."""
     return {
         "sheet": "Преподаватели на ОП",
         "program": "Финансы",
@@ -62,17 +75,17 @@ def build_row_issue() -> RowIssue:
         "status": "Требует внимания",
         "metrics_below_3": [{"metric": "Общее качество", "value": 2.9}],
         "metrics_below_4": [{"metric": "Общее качество", "value": 2.9}],
-        "min_score": 2.9,
+        "min_score": 2.5,
     }
 
 
 class EmailNotificationTests(unittest.TestCase):
     def test_recipients_include_to_managers_and_permanent_cc(self) -> None:
-        """Проверяет сбор основных получателей, менеджеров и постоянных копий."""
+        """Recipients should include leads, managers, and permanent CC addresses."""
         notification = build_program_notification(
             build_program_summary(),
             build_contact(),
-            [build_discipline_summary()],
+            [build_discipline_summary(), build_risk_discipline_summary()],
             [build_row_issue()],
             "source.xlsx",
             "3 модуль 2025/2026",
@@ -86,8 +99,27 @@ class EmailNotificationTests(unittest.TestCase):
         for email in PERMANENT_CC_EMAILS:
             self.assertIn(email, notification["cc"])
 
+        message = notification["message"]
+        plain_body = message.get_body(preferencelist=("plain",)).get_content()
+        html_body = message.get_body(preferencelist=("html",)).get_content()
+
+        self.assertIn("Дисциплины, требующие внимания", plain_body)
+        self.assertIn("Дисциплины, имеющие риски", plain_body)
+        self.assertIn("Подробные сведения по преподавателям, дисциплинам и метрикам приложены в PDF-файле.", plain_body)
+        self.assertIn("<h3>Дисциплины, требующие внимания</h3>", html_body)
+        self.assertIn("<h3>Дисциплины, имеющие риски</h3>", html_body)
+        self.assertIn("<h3>Детали по преподавателям, дисциплинам и метрикам</h3>", html_body)
+
+        attachments = list(message.iter_attachments())
+        self.assertEqual(len(attachments), 1)
+        self.assertEqual(attachments[0].get_filename(), "Финансы_3_модуль_2025_2026.pdf")
+        self.assertEqual(attachments[0].get_content_type(), "application/pdf")
+        attachment_payload = attachments[0].get_payload(decode=True)
+        self.assertIsNotNone(attachment_payload)
+        self.assertTrue(attachment_payload.startswith(b"%PDF-"))
+
     def test_empty_to_raises_error(self) -> None:
-        """Проверяет ошибку при пустом списке основных получателей."""
+        """An empty recipient list should raise an explicit error."""
         contact = build_contact()
         contact["academic_lead_emails"] = []
 
@@ -95,7 +127,7 @@ class EmailNotificationTests(unittest.TestCase):
             build_program_notification(
                 build_program_summary(),
                 contact,
-                [build_discipline_summary()],
+                [build_discipline_summary(), build_risk_discipline_summary()],
                 [build_row_issue()],
                 "source.xlsx",
                 "3 модуль 2025/2026",
@@ -106,11 +138,11 @@ class EmailNotificationTests(unittest.TestCase):
     @patch("email_notifications.time.sleep")
     @patch("email_notifications.smtplib.SMTP")
     def test_smtp_retry_after_failure(self, mock_smtp: Mock, mock_sleep: Mock) -> None:
-        """Проверяет повторную SMTP-отправку после временного сбоя."""
+        """SMTP send should retry once after a temporary failure."""
         notification = build_program_notification(
             build_program_summary(),
             build_contact(),
-            [build_discipline_summary()],
+            [build_discipline_summary(), build_risk_discipline_summary()],
             [build_row_issue()],
             "source.xlsx",
             "3 модуль 2025/2026",
