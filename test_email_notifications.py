@@ -16,7 +16,7 @@ def build_program_summary() -> ProgramSummary:
     return {
         "program": "Финансы",
         "status": "Есть риски",
-        "attention_discipline_count": 1,
+        "alarm_discipline_count": 1,
         "risk_discipline_count": 0,
         "issue_count": 1,
         "min_score": 2.9,
@@ -39,7 +39,7 @@ def build_discipline_summary() -> DisciplineSummary:
         "discipline": "Курс 1",
         "status": "Требует внимания",
         "issue_count": 1,
-        "attention_issue_count": 1,
+        "alarm_issue_count": 1,
         "risk_issue_count": 0,
         "min_score": 2.9,
     }

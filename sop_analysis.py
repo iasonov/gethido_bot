@@ -10,7 +10,7 @@ import pandas as pd
 
 Status = Literal["Требует внимания", "Есть риски", "Без риска"]
 
-STATUS_ATTENTION: Status = "Требует внимания"
+STATUS_ALARM: Status = "Требует внимания"
 STATUS_RISK: Status = "Есть риски"
 STATUS_OK: Status = "Без риска"
 
@@ -68,7 +68,7 @@ class DisciplineSummary(TypedDict):
     discipline: str
     status: Status
     issue_count: int
-    attention_issue_count: int
+    alarm_issue_count: int
     risk_issue_count: int
     min_score: float
 
@@ -76,7 +76,7 @@ class DisciplineSummary(TypedDict):
 class ProgramSummary(TypedDict):
     program: str
     status: Status
-    attention_discipline_count: int
+    alarm_discipline_count: int
     risk_discipline_count: int
     issue_count: int
     min_score: float
@@ -108,8 +108,8 @@ def classify_metrics(metric_values: dict[str, float]) -> Status:
     below_3_count = sum(1 for value in metric_values.values() if value < 3)
     below_4_count = sum(1 for value in metric_values.values() if value < 4)
     if below_3_count >= 1:
-        return STATUS_ATTENTION
-    if below_4_count > 1:
+        return STATUS_ALARM
+    if below_4_count >= 1:
         return STATUS_RISK
     return STATUS_OK
 
@@ -221,8 +221,8 @@ def collect_row_issues(frames: dict[str, pd.DataFrame]) -> list[RowIssue]:
 
 
 def strongest_status(statuses: list[Status]) -> Status:
-    if STATUS_ATTENTION in statuses:
-        return STATUS_ATTENTION
+    if STATUS_ALARM in statuses:
+        return STATUS_ALARM
     if STATUS_RISK in statuses:
         return STATUS_RISK
     return STATUS_OK
@@ -237,15 +237,15 @@ def summarize_disciplines(row_issues: list[RowIssue]) -> list[DisciplineSummary]
     summaries: list[DisciplineSummary] = []
     for (program, discipline), issues in grouped.items():
         statuses = [issue["status"] for issue in issues]
-        attention_count = sum(1 for issue in issues if issue["status"] == STATUS_ATTENTION)
-        risk_count = sum(1 for issue in issues if issue["status"] == STATUS_RISK)
+        alarm_count = sum(1 for issue in issues if issue["status"] == STATUS_ALARM)
+        risk_count  = sum(1 for issue in issues if issue["status"] == STATUS_RISK)
         summaries.append(
             {
                 "program": program,
                 "discipline": discipline,
                 "status": strongest_status(statuses),
                 "issue_count": len(issues),
-                "attention_issue_count": attention_count,
+                "alarm_issue_count": alarm_count,
                 "risk_issue_count": risk_count,
                 "min_score": min(issue["min_score"] for issue in issues),
             }
@@ -269,22 +269,20 @@ def summarize_programs(
 
     summaries: list[ProgramSummary] = []
     for program, disciplines in disciplines_by_program.items():
-        attention_count = sum(
-            1 for discipline in disciplines if discipline["status"] == STATUS_ATTENTION
-        )
-        risk_count = sum(1 for discipline in disciplines if discipline["status"] == STATUS_RISK)
+        alarm_count = sum(1 for discipline in disciplines if discipline["status"] == STATUS_ALARM)
+        risk_count  = sum(1 for discipline in disciplines if discipline["status"] == STATUS_RISK)
         status = STATUS_OK
-        if attention_count >= 2:
-            status = STATUS_ATTENTION
-        elif attention_count == 1 or risk_count > 0:
+        if alarm_count == 0 and risk_count == 1:
             status = STATUS_RISK
+        elif alarm_count > 0 or risk_count > 1:
+            status =  STATUS_ALARM
 
         program_row_issues = row_issues_by_program.get(program, [])
         summaries.append(
             {
                 "program": program,
                 "status": status,
-                "attention_discipline_count": attention_count,
+                "alarm_discipline_count": alarm_count,
                 "risk_discipline_count": risk_count,
                 "issue_count": len(program_row_issues),
                 "min_score": min(issue["min_score"] for issue in program_row_issues),

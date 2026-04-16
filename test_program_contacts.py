@@ -26,7 +26,7 @@ class ProgramContactsTests(unittest.TestCase):
                     {
                         "program": "Финансы",
                         "status": "Есть риски",
-                        "attention_discipline_count": 1,
+                        "alarm_discipline_count": 1,
                         "risk_discipline_count": 0,
                         "issue_count": 1,
                         "min_score": 2.9,
@@ -53,7 +53,7 @@ class ProgramContactsTests(unittest.TestCase):
                     {
                         "program": "Финансы",
                         "status": "Есть риски",
-                        "attention_discipline_count": 1,
+                        "alarm_discipline_count": 1,
                         "risk_discipline_count": 0,
                         "issue_count": 1,
                         "min_score": 2.9,

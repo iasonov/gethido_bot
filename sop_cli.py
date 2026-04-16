@@ -150,7 +150,10 @@ def run_command(args: argparse.Namespace) -> int:
 
 def main() -> None:
     parser = build_parser()
-    args = parser.parse_args(sys.argv[1:])
+    if len(sys.argv) == 1:
+        args = parser.parse_args(["preview", "--sop-xlsx", "sop.xlsx", "--contacts-csv", "program_contacts.csv", "--out-dir", "output"]) #"--dry-run", "true",
+    else:
+        args = parser.parse_args(sys.argv[1:])
     exit_code = run_command(args)
     raise SystemExit(exit_code)
 

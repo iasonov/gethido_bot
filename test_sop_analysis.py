@@ -8,7 +8,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from sop_analysis import (
     RowIssue,
-    STATUS_ATTENTION,
+    STATUS_ALARM,
     STATUS_OK,
     STATUS_RISK,
     DisciplineSummary,
@@ -28,7 +28,7 @@ class SopAnalysisRuleTests(unittest.TestCase):
     def test_one_metric_below_three_requires_attention(self) -> None:
         status = classify_metrics({"Качество": 2.9})
 
-        self.assertEqual(status, STATUS_ATTENTION)
+        self.assertEqual(status, STATUS_ALARM)
 
     def test_more_than_one_metric_below_four_has_risks(self) -> None:
         status = classify_metrics({"Качество": 3.5, "Ясность": 3.7})
@@ -51,23 +51,23 @@ class SopAnalysisRuleTests(unittest.TestCase):
 
         self.assertEqual(select_score_columns(frame), ["Новизна содержания"])
 
-    def test_two_attention_disciplines_raise_program_attention(self) -> None:
+    def test_two_alarm_disciplines_raise_program_attention(self) -> None:
         discipline_summaries: list[DisciplineSummary] = [
                 {
                     "program": "A",
                     "discipline": "D1",
-                    "status": STATUS_ATTENTION,
+                    "status": STATUS_ALARM,
                     "issue_count": 1,
-                    "attention_issue_count": 1,
+                    "alarm_issue_count": 1,
                     "risk_issue_count": 0,
                     "min_score": 2.8,
                 },
                 {
                     "program": "A",
                     "discipline": "D2",
-                    "status": STATUS_ATTENTION,
+                    "status": STATUS_ALARM,
                     "issue_count": 1,
-                    "attention_issue_count": 1,
+                    "alarm_issue_count": 1,
                     "risk_issue_count": 0,
                     "min_score": 2.7,
                 },
@@ -82,7 +82,7 @@ class SopAnalysisRuleTests(unittest.TestCase):
                     "discipline": "D1",
                     "activity": "",
                     "teacher": "",
-                    "status": STATUS_ATTENTION,
+                    "status": STATUS_ALARM,
                     "metrics_below_3": [{"metric": "M", "value": 2.8}],
                     "metrics_below_4": [{"metric": "M", "value": 2.8}],
                     "min_score": 2.8,
@@ -96,7 +96,7 @@ class SopAnalysisRuleTests(unittest.TestCase):
                     "discipline": "D2",
                     "activity": "",
                     "teacher": "",
-                    "status": STATUS_ATTENTION,
+                    "status": STATUS_ALARM,
                     "metrics_below_3": [{"metric": "M", "value": 2.7}],
                     "metrics_below_4": [{"metric": "M", "value": 2.7}],
                     "min_score": 2.7,
@@ -104,16 +104,16 @@ class SopAnalysisRuleTests(unittest.TestCase):
             ]
         summaries = summarize_programs(discipline_summaries, row_issues)
 
-        self.assertEqual(summaries[0]["status"], STATUS_ATTENTION)
+        self.assertEqual(summaries[0]["status"], STATUS_ALARM)
 
-    def test_one_attention_discipline_raises_program_risk(self) -> None:
+    def test_one_alarm_discipline_raises_program_risk(self) -> None:
         discipline_summaries: list[DisciplineSummary] = [
                 {
                     "program": "A",
                     "discipline": "D1",
-                    "status": STATUS_ATTENTION,
+                    "status": STATUS_ALARM,
                     "issue_count": 1,
-                    "attention_issue_count": 1,
+                    "alarm_issue_count": 1,
                     "risk_issue_count": 0,
                     "min_score": 2.8,
                 }
@@ -128,7 +128,7 @@ class SopAnalysisRuleTests(unittest.TestCase):
                     "discipline": "D1",
                     "activity": "",
                     "teacher": "",
-                    "status": STATUS_ATTENTION,
+                    "status": STATUS_ALARM,
                     "metrics_below_3": [{"metric": "M", "value": 2.8}],
                     "metrics_below_4": [{"metric": "M", "value": 2.8}],
                     "min_score": 2.8,
