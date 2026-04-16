@@ -116,27 +116,9 @@ def normalize_level(value: str) -> str:
     return normalize_text(value)
 
 
-def strip_program_level_marker(program: str) -> str:
-    """Удаляет уровень из названия программы перед добавлением стандартного ключа уровня."""
-    normalized_program = normalize_text(program)
-    normalized_program = re.sub(
-        r"\s*[/\\]\s*(магистратура|бакалавриат)\s*$",
-        "",
-        normalized_program,
-        flags=re.IGNORECASE,
-    )
-    normalized_program = re.sub(
-        r"\s*\((магистратура|бакалавриат)\)\s*$",
-        "",
-        normalized_program,
-        flags=re.IGNORECASE,
-    )
-    return normalize_text(normalized_program)
-
-
 def build_program_key(program: str, level: str) -> str:
     """Формирует ключ программы с уровнем, чтобы различать одноименные программы."""
-    normalized_program = strip_program_level_marker(program)
+    normalized_program = normalize_text(program)
     normalized_level = normalize_level(level)
     if not normalized_level:
         return normalized_program
