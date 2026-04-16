@@ -452,7 +452,7 @@ def build_html_body(
         attention_section = f"""
     <h3>Дисциплины, требующие внимания</h3>
     <p><i>Хотя бы одна средняя оценка ниже 3 баллов или хотя бы две средних оценки ниже 4 баллов.</i></p>
-    <table class="sop-table sop-table-discipline" border="1" cellpadding="6" cellspacing="0">
+    <table class="sop-table-discipline" border="1" cellpadding="6" cellspacing="0">
       <colgroup>
         <col style="width: 75%;" />
         <col style="width: 25%;" />
@@ -468,7 +468,7 @@ def build_html_body(
         risk_section = f"""
     <h3>Дисциплины, имеющие риски</h3>
     <p><i>Хотя бы одна средняя оценка ниже 4 баллов.</i></p>
-    <table class="sop-table sop-table-discipline" border="1" cellpadding="6" cellspacing="0">
+    <table class="sop-table-discipline" border="1" cellpadding="6" cellspacing="0">
       <colgroup>
         <col style="width: 75%;" />
         <col style="width: 25%;" />
@@ -482,21 +482,50 @@ def build_html_body(
     # if issue_rows == "":
     #     issue_rows = "<tr><td colspan=\"4\">Нет деталей по преподавателям и метрикам.</td></tr>"
 
+#   table.sop-table {{
+    #     width: 100%;
+    #     table-layout: fixed;
+    #   }}
+    #   table.sop-table th,
+    #   table.sop-table td {{
+    #     word-break: break-word;
+    #   }}
+    #  table.sop-table th:nth-child(1),
+    #   table.sop-table td:nth-child(1) {{
+    #     width: 25%;
+    #   }}
+    #   table.sop-table th:nth-child(2),
+    #   table.sop-table td:nth-child(2) {{
+    #     width: 25%;
+    #   }}
+    #   table.sop-table th:nth-child(3),
+    #   table.sop-table td:nth-child(3) {{
+    #     width: 25%;
+    #   }}
+    #   table.sop-table th:nth-child(4),
+    #   table.sop-table td:nth-child(4) {{
+    #     width: 25%;
+    #   }}
     return f"""
 <html>
   <body>
     <style>
-      table.sop-table {{
-        width: 100%;
-        table-layout: fixed;
-      }}
-      table.sop-table th,
-      table.sop-table td {{
-        word-break: break-word;
-      }}
+
       table.sop-table-discipline {{
         width: 100%;
         table-layout: fixed;
+      }}
+      table.sop-table-discipline th,
+      table.sop-table-discipline td {{
+        word-break: break-word;
+      }}
+      table.sop-table-discipline th:nth-child(1),
+      table.sop-table-discipline td:nth-child(1) {{
+        width: 75%;
+      }}
+      table.sop-table-discipline th:nth-child(2),
+      table.sop-table-discipline td:nth-child(2) {{
+        width: 25%;
       }}
     </style>
     <p>Добрый день!</p>
