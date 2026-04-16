@@ -47,6 +47,7 @@ class ProgramNotification(TypedDict):
 
 
 def read_secret_values() -> dict[str, str]:
+    """Читает SMTP-настройки из my_secrets.py, если файл доступен в проекте."""
     try:
         import my_secrets
     except ModuleNotFoundError:
@@ -71,6 +72,7 @@ def read_secret_values() -> dict[str, str]:
 
 
 def read_config_value(name: str, secret_values: dict[str, str]) -> str:
+    """Возвращает обязательное значение настройки из окружения или my_secrets.py."""
     env_value = os.environ.get(name)
     if env_value is not None and env_value != "":
         return env_value
@@ -85,6 +87,7 @@ def read_optional_config_value(
     secret_values: dict[str, str],
     fallback: str,
 ) -> str:
+    """Возвращает необязательное значение настройки или переданное значение по умолчанию."""
     env_value = os.environ.get(name)
     if env_value is not None and env_value != "":
         return env_value
@@ -95,6 +98,7 @@ def read_optional_config_value(
 
 
 def unique_emails(emails: list[str]) -> list[str]:
+    """Удаляет дубли email без изменения первого встреченного написания адреса."""
     seen: set[str] = set()
     result: list[str] = []
     for email in emails:
@@ -110,6 +114,7 @@ def get_program_disciplines(
     program: str,
     discipline_summaries: list[DisciplineSummary],
 ) -> list[DisciplineSummary]:
+    """Возвращает проблемные дисциплины выбранной программы, отсортированные по риску."""
     disciplines = [
         discipline for discipline in discipline_summaries if discipline["program"] == program
     ]
@@ -117,16 +122,19 @@ def get_program_disciplines(
 
 
 def get_program_row_issues(program: str, row_issues: list[RowIssue]) -> list[RowIssue]:
+    """Возвращает проблемные строки выбранной программы, отсортированные по риску."""
     issues = [issue for issue in row_issues if issue["program"] == program]
     return sorted(issues, key=lambda item: (item["status"], item["min_score"], item["discipline"]))
 
 
 def format_metric_issues(issue: RowIssue) -> str:
+    """Форматирует список проблемных метрик строки для текста письма."""
     metrics = issue["metrics_below_3"] if issue["metrics_below_3"] else issue["metrics_below_4"]
     return "; ".join(f"{metric['metric']}: {metric['value']:.2f}" for metric in metrics)
 
 
 def build_subject(program_summary: ProgramSummary, module_label: str) -> str:
+    """Формирует тему письма по программе, статусу и периоду СОП."""
     return f"[СОП] {program_summary['status']}: {program_summary['program']}, {module_label}"
 
 
@@ -137,11 +145,12 @@ def build_text_body(
     source_label: str,
     module_label: str,
 ) -> str:
+    """Формирует текстовую версию письма-оповещения без генеративного ИИ."""
     lines = [
         "Добрый день!",
         "",
         f"По итогам анализа студенческой оценки преподавания за {module_label} по программе "
-        f"«{program_summary['program']}» просим обратить внимание на дисциплины:", #зафиксирован статус: {program_summary['status']}.
+        f"«{program_summary['program']}» просим обратить внимание на дисциплины:",
         ""
     ]
 
@@ -163,13 +172,7 @@ def build_text_body(
 
     lines.extend(
         [
-            ""#,
-            # "На что обратить внимание:",
-            # "- проверить дисциплины и преподавателей с оценками ниже порогов;",
-            # "- обсудить причины низких оценок с командой программы;",
-            # "- определить корректирующие действия по содержанию, коммуникации и организации курса.",
-            # "",
-            # f"Источник данных: {source_label}",
+            ""
         ]
     )
     return "\n".join(lines)
@@ -182,6 +185,7 @@ def build_html_body(
     source_label: str,
     module_label: str,
 ) -> str:
+    """Формирует HTML-версию письма-оповещения без генеративного ИИ."""
     discipline_rows = "\n".join(
         "<tr>"
         f"<td>{html.escape(discipline['discipline'])}</td>"
@@ -201,7 +205,6 @@ def build_html_body(
         for issue in row_issues
     )
 
-    # зафиксирован статус:       <strong>{html.escape(program_summary['status'])}</strong>
     return f"""
 <html>
   <body>
@@ -246,6 +249,7 @@ def build_program_notification(
     from_email: str,
     from_name: str,
 ) -> ProgramNotification:
+    """Собирает готовое письмо и списки получателей для одной программы."""
     to_emails = unique_emails(contact["academic_lead_emails"])
     if not to_emails:
         raise EmailNotificationError(
@@ -283,6 +287,7 @@ def build_program_notification(
 
 
 def read_smtp_config() -> SmtpConfig:
+    """Читает полную SMTP-конфигурацию из окружения или my_secrets.py."""
     secret_values = read_secret_values()
 
     return {
@@ -302,6 +307,7 @@ def read_smtp_config() -> SmtpConfig:
 
 
 def send_email_message(notification: ProgramNotification, config: SmtpConfig) -> None:
+    """Отправляет письмо через SMTP с повторными попытками при временных ошибках."""
     recipients = [*notification["to"], *notification["cc"]]
     last_error: Exception | None = None
     for attempt in range(1, config["attempts"] + 1):
@@ -337,6 +343,7 @@ def write_notification_previews(
     notifications: list[ProgramNotification],
     output_dir: Path,
 ) -> None:
+    """Сохраняет предпросмотр писем в формате .eml для ручной проверки."""
     emails_dir = output_dir / "emails"
     emails_dir.mkdir(parents=True, exist_ok=True)
     for index, notification in enumerate(notifications, start=1):
@@ -351,6 +358,7 @@ def write_recipients_csv(
     notifications: list[ProgramNotification],
     output_dir: Path,
 ) -> None:
+    """Сохраняет CSV-сводку получателей, тем и статусов писем."""
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "email_recipients.csv"
     with path.open("w", encoding="utf-8-sig", newline="") as file:
@@ -376,6 +384,7 @@ def append_send_log(
     log_path: Path,
     dry_run: bool,
 ) -> None:
+    """Добавляет структурированную JSONL-запись о подготовке или отправке письма."""
     log_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "program": notification["program"],

@@ -39,6 +39,7 @@ class ContactMatchResult(TypedDict):
 
 
 def split_list_field(value: str) -> list[str]:
+    """Разбивает поле CSV со списком email на отдельные очищенные значения."""
     if not value:
         return []
     parts = re.split(r"[;\n,]+", value)
@@ -46,6 +47,7 @@ def split_list_field(value: str) -> list[str]:
 
 
 def split_aliases(value: str) -> list[str]:
+    """Разбивает поле CSV с алиасами программ на отдельные названия."""
     if not value:
         return []
     parts = re.split(r"[|\n]+", value)
@@ -53,11 +55,13 @@ def split_aliases(value: str) -> list[str]:
 
 
 def validate_email(email: str) -> None:
+    """Проверяет email-адрес и явно падает при некорректном формате."""
     if EMAIL_PATTERN.match(email) is None:
         raise ContactError(f"Invalid email address in contacts CSV: {email}")
 
 
 def validate_contact(contact: ProgramContact) -> None:
+    """Проверяет обязательные поля и email-адреса одной строки контактов."""
     if not contact["program"]:
         raise ContactError("Contacts CSV contains a row without a program name")
     if not contact["academic_lead_emails"]:
@@ -73,6 +77,7 @@ def validate_contact(contact: ProgramContact) -> None:
 
 
 def read_program_contacts(path: Path) -> list[ProgramContact]:
+    """Читает CSV с контактами программ и валидирует каждую строку."""
     if not path.exists():
         raise ContactError(f"Contacts CSV does not exist: {path}")
 
@@ -102,6 +107,7 @@ def read_program_contacts(path: Path) -> list[ProgramContact]:
 
 
 def build_contact_index(contacts: list[ProgramContact]) -> dict[str, ProgramContact]:
+    """Строит индекс контактов по нормализованным названиям программ и алиасам."""
     index: dict[str, ProgramContact] = {}
     for contact in contacts:
         keys = [contact["program"], *contact["program_aliases"]]
@@ -109,7 +115,7 @@ def build_contact_index(contacts: list[ProgramContact]) -> dict[str, ProgramCont
             normalized_key = normalize_program_name(key)
             if not normalized_key:
                 continue
-            if normalized_key in index:
+            if normalized_key in index and index[normalized_key] is not contact:
                 raise ContactError(f"Duplicate contact alias in contacts CSV: {key}")
             index[normalized_key] = contact
     return index
@@ -119,6 +125,7 @@ def match_contacts(
     program_summaries: list[ProgramSummary],
     contacts: list[ProgramContact],
 ) -> ContactMatchResult:
+    """Сопоставляет программы из анализа СОП со строками контактного CSV."""
     index = build_contact_index(contacts)
     contacts_by_program: dict[str, ProgramContact] = {}
     missing_programs: list[str] = []
@@ -136,6 +143,7 @@ def match_contacts(
 
 
 def assert_all_programs_have_contacts(match_result: ContactMatchResult) -> None:
+    """Прерывает выполнение, если для какой-либо программы не найдены контакты."""
     if match_result["missing_programs"]:
         joined_programs = "\n".join(f"- {program}" for program in match_result["missing_programs"])
         raise ContactError(f"Missing contacts for SOP programs:\n{joined_programs}")

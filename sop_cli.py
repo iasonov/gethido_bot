@@ -19,6 +19,7 @@ from sop_analysis import SopAnalysisResult, analyze_sop_workbook, write_analysis
 
 
 def parse_bool(value: str) -> bool:
+    """Преобразует строковый CLI-параметр в булево значение."""
     normalized_value = value.strip().lower()
     if normalized_value in {"true", "1", "yes", "y", "да"}:
         return True
@@ -28,6 +29,7 @@ def parse_bool(value: str) -> bool:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Создает парсер аргументов CLI для предпросмотра и отправки писем."""
     parser = argparse.ArgumentParser(
         prog="python -m sop_cli",
         description="Analyze SOP xlsx files and prepare email notifications.",
@@ -53,6 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def resolve_optional_text(value: str | None, fallback: str) -> str:
+    """Возвращает переданный текст или запасное значение, если текст пустой."""
     if value is None or value.strip() == "":
         return fallback
     return value
@@ -65,6 +68,7 @@ def build_notifications(
     from_email: str,
     from_name: str,
 ) -> tuple[SopAnalysisResult, list[ProgramNotification]]:
+    """Анализирует СОП, сопоставляет контакты и собирает письма по программам."""
     analysis_result = analyze_sop_workbook(sop_xlsx)
     contacts = read_program_contacts(contacts_csv)
     match_result = match_contacts(analysis_result["program_summaries"], contacts)
@@ -87,6 +91,7 @@ def build_notifications(
 
 
 def run_preview(args: argparse.Namespace) -> int:
+    """Выполняет CLI-команду предпросмотра без отправки писем."""
     module_label = resolve_optional_text(args.module_label, DEFAULT_MODULE_LABEL)
     from_email = resolve_optional_text(args.from_email, "no-reply@example.invalid")
     from_name = resolve_optional_text(args.from_name, "Онлайн-кампус")
@@ -106,6 +111,7 @@ def run_preview(args: argparse.Namespace) -> int:
 
 
 def run_send(args: argparse.Namespace) -> int:
+    """Выполняет CLI-команду отправки или dry-run с теми же проверками."""
     module_label = resolve_optional_text(args.module_label, DEFAULT_MODULE_LABEL)
     output_dir = Path(resolve_optional_text(args.out_dir, "output/sop_send"))
     if args.dry_run:
@@ -141,6 +147,7 @@ def run_send(args: argparse.Namespace) -> int:
 
 
 def run_command(args: argparse.Namespace) -> int:
+    """Направляет разобранные аргументы в нужную CLI-команду."""
     if args.command == "preview":
         return run_preview(args)
     if args.command == "send":
@@ -149,9 +156,10 @@ def run_command(args: argparse.Namespace) -> int:
 
 
 def main() -> None:
+    """Точка входа для запуска модуля через python -m sop_cli."""
     parser = build_parser()
     if len(sys.argv) == 1:
-        args = parser.parse_args(["preview", "--sop-xlsx", "sop.xlsx", "--contacts-csv", "program_contacts.csv", "--out-dir", "output"]) #"--dry-run", "true",
+        args = parser.parse_args(["preview", "--sop-xlsx", "sop.xlsx", "--contacts-csv", "program_contacts.csv", "--out-dir", "output"])
     else:
         args = parser.parse_args(sys.argv[1:])
     exit_code = run_command(args)

@@ -12,6 +12,7 @@ from program_contacts import (
 
 class ProgramContactsTests(unittest.TestCase):
     def test_exact_program_match(self) -> None:
+        """Проверяет сопоставление контакта по точному названию программы."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "contacts.csv"
             path.write_text(
@@ -39,6 +40,7 @@ class ProgramContactsTests(unittest.TestCase):
         self.assertIn("Финансы", result["contacts_by_program"])
 
     def test_alias_program_match(self) -> None:
+        """Проверяет сопоставление контакта по алиасу программы."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "contacts.csv"
             path.write_text(
@@ -65,6 +67,7 @@ class ProgramContactsTests(unittest.TestCase):
         self.assertEqual(result["contacts_by_program"]["Финансы"]["program"], "Master of Finance")
 
     def test_missing_program_raises_error(self) -> None:
+        """Проверяет явную ошибку при отсутствии контакта программы."""
         match_result = {"contacts_by_program": {}, "missing_programs": ["Финансы"]}
 
         with self.assertRaises(ContactError):

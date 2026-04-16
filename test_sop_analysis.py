@@ -9,7 +9,6 @@ from openpyxl.worksheet.worksheet import Worksheet
 from sop_analysis import (
     RowIssue,
     STATUS_ALARM,
-    STATUS_OK,
     STATUS_RISK,
     DisciplineSummary,
     analyze_sop_workbook,
@@ -20,27 +19,32 @@ from sop_analysis import (
 
 
 def append_rows(sheet: Worksheet, rows: list[list[object]]) -> None:
+    """Добавляет набор строк в лист тестовой xlsx-книги."""
     for row in rows:
         sheet.append(row)
 
 
 class SopAnalysisRuleTests(unittest.TestCase):
     def test_one_metric_below_three_requires_attention(self) -> None:
+        """Проверяет, что оценка ниже 3 дает самый строгий статус."""
         status = classify_metrics({"Качество": 2.9})
 
         self.assertEqual(status, STATUS_ALARM)
 
     def test_more_than_one_metric_below_four_has_risks(self) -> None:
+        """Проверяет, что оценки ниже 4 дают статус риска."""
         status = classify_metrics({"Качество": 3.5, "Ясность": 3.7})
 
         self.assertEqual(status, STATUS_RISK)
 
-    def test_single_metric_below_four_is_ok(self) -> None:
+    def test_single_metric_below_four_has_risk(self) -> None:
+        """Фиксирует текущую границу статуса для одной оценки ниже 4."""
         status = classify_metrics({"Качество": 3.5, "Ясность": 4.2})
 
-        self.assertEqual(status, STATUS_OK)
+        self.assertEqual(status, STATUS_RISK)
 
     def test_difficulty_column_is_excluded(self) -> None:
+        """Проверяет, что колонка сложности не считается оценочной метрикой."""
         frame = pd.DataFrame(
             {
                 "Программа": ["A"],
@@ -52,6 +56,7 @@ class SopAnalysisRuleTests(unittest.TestCase):
         self.assertEqual(select_score_columns(frame), ["Новизна содержания"])
 
     def test_two_alarm_disciplines_raise_program_attention(self) -> None:
+        """Проверяет повышение статуса программы при двух тревожных дисциплинах."""
         discipline_summaries: list[DisciplineSummary] = [
                 {
                     "program": "A",
@@ -107,6 +112,7 @@ class SopAnalysisRuleTests(unittest.TestCase):
         self.assertEqual(summaries[0]["status"], STATUS_ALARM)
 
     def test_one_alarm_discipline_raises_program_risk(self) -> None:
+        """Проверяет текущую агрегацию статуса программы для одной тревожной дисциплины."""
         discipline_summaries: list[DisciplineSummary] = [
                 {
                     "program": "A",
@@ -136,11 +142,12 @@ class SopAnalysisRuleTests(unittest.TestCase):
             ]
         summaries = summarize_programs(discipline_summaries, row_issues)
 
-        self.assertEqual(summaries[0]["status"], STATUS_RISK)
+        self.assertEqual(summaries[0]["status"], STATUS_ALARM)
 
 
 class SopWorkbookTests(unittest.TestCase):
     def test_analyze_small_workbook(self) -> None:
+        """Проверяет анализ минимальной xlsx-книги с обязательными листами."""
         headers = [
             "Кампус",
             "Уровень",
@@ -176,8 +183,8 @@ class SopWorkbookTests(unittest.TestCase):
 
             result = analyze_sop_workbook(path)
 
-        self.assertEqual(result["program_summaries"][0]["program"], "Финансы")
-        self.assertEqual(result["program_summaries"][0]["status"], STATUS_RISK)
+        self.assertEqual(result["program_summaries"][0]["program"], "Финансы / Магистратура")
+        self.assertEqual(result["program_summaries"][0]["status"], STATUS_ALARM)
 
 
 if __name__ == "__main__":

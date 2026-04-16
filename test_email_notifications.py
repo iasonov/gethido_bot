@@ -13,6 +13,7 @@ from sop_analysis import DisciplineSummary, ProgramSummary, RowIssue
 
 
 def build_program_summary() -> ProgramSummary:
+    """Возвращает тестовую сводку по программе."""
     return {
         "program": "Финансы",
         "status": "Есть риски",
@@ -24,6 +25,7 @@ def build_program_summary() -> ProgramSummary:
 
 
 def build_contact() -> ProgramContact:
+    """Возвращает тестовые контакты программы."""
     return {
         "program": "Финансы",
         "academic_lead_emails": ["lead@hse.ru"],
@@ -34,6 +36,7 @@ def build_contact() -> ProgramContact:
 
 
 def build_discipline_summary() -> DisciplineSummary:
+    """Возвращает тестовую сводку по дисциплине."""
     return {
         "program": "Финансы",
         "discipline": "Курс 1",
@@ -46,6 +49,7 @@ def build_discipline_summary() -> DisciplineSummary:
 
 
 def build_row_issue() -> RowIssue:
+    """Возвращает тестовую проблемную строку СОП."""
     return {
         "sheet": "Преподаватели на ОП",
         "program": "Финансы",
@@ -63,7 +67,8 @@ def build_row_issue() -> RowIssue:
 
 
 class EmailNotificationTests(unittest.TestCase):
-    def test_recipients_include_to_managers_and_permanent_cc(self):
+    def test_recipients_include_to_managers_and_permanent_cc(self) -> None:
+        """Проверяет сбор основных получателей, менеджеров и постоянных копий."""
         notification = build_program_notification(
             build_program_summary(),
             build_contact(),
@@ -81,7 +86,8 @@ class EmailNotificationTests(unittest.TestCase):
         for email in PERMANENT_CC_EMAILS:
             self.assertIn(email, notification["cc"])
 
-    def test_empty_to_raises_error(self):
+    def test_empty_to_raises_error(self) -> None:
+        """Проверяет ошибку при пустом списке основных получателей."""
         contact = build_contact()
         contact["academic_lead_emails"] = []
 
@@ -99,7 +105,8 @@ class EmailNotificationTests(unittest.TestCase):
 
     @patch("email_notifications.time.sleep")
     @patch("email_notifications.smtplib.SMTP")
-    def test_smtp_retry_after_failure(self, mock_smtp, mock_sleep):
+    def test_smtp_retry_after_failure(self, mock_smtp: Mock, mock_sleep: Mock) -> None:
+        """Проверяет повторную SMTP-отправку после временного сбоя."""
         notification = build_program_notification(
             build_program_summary(),
             build_contact(),

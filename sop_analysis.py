@@ -90,6 +90,7 @@ class SopAnalysisResult(TypedDict):
 
 
 def normalize_text(value: Any) -> str:
+    """Возвращает строковое значение без краевых пробелов и лишних пробельных символов."""
     if value is None:
         return ""
     text = str(value).strip()
@@ -97,6 +98,7 @@ def normalize_text(value: Any) -> str:
 
 
 def normalize_program_name(value: str) -> str:
+    """Нормализует название программы для устойчивого сопоставления ключей и алиасов."""
     text = normalize_text(value).lower()
     text = text.replace("ё", "е")
     text = re.sub(r"[«»\"'`]", "", text)
@@ -104,7 +106,45 @@ def normalize_program_name(value: str) -> str:
     return text
 
 
+def normalize_level(value: str) -> str:
+    """Приводит уровень программы к единому русскому обозначению."""
+    normalized_value = normalize_text(value).lower()
+    if normalized_value in {"master", "магистратура", "маг"}:
+        return "Магистратура"
+    if normalized_value in {"bachelor", "бакалавриат", "бак"}:
+        return "Бакалавриат"
+    return normalize_text(value)
+
+
+def strip_program_level_marker(program: str) -> str:
+    """Удаляет уровень из названия программы перед добавлением стандартного ключа уровня."""
+    normalized_program = normalize_text(program)
+    normalized_program = re.sub(
+        r"\s*[/\\]\s*(магистратура|бакалавриат)\s*$",
+        "",
+        normalized_program,
+        flags=re.IGNORECASE,
+    )
+    normalized_program = re.sub(
+        r"\s*\((магистратура|бакалавриат)\)\s*$",
+        "",
+        normalized_program,
+        flags=re.IGNORECASE,
+    )
+    return normalize_text(normalized_program)
+
+
+def build_program_key(program: str, level: str) -> str:
+    """Формирует ключ программы с уровнем, чтобы различать одноименные программы."""
+    normalized_program = strip_program_level_marker(program)
+    normalized_level = normalize_level(level)
+    if not normalized_level:
+        return normalized_program
+    return f"{normalized_program} / {normalized_level}"
+
+
 def classify_metrics(metric_values: dict[str, float]) -> Status:
+    """Определяет статус набора оценочных метрик по заданным порогам риска."""
     below_3_count = sum(1 for value in metric_values.values() if value < 3)
     below_4_count = sum(1 for value in metric_values.values() if value < 4)
     if below_3_count >= 1:
@@ -115,6 +155,7 @@ def classify_metrics(metric_values: dict[str, float]) -> Status:
 
 
 def is_score_column(column_name: str) -> bool:
+    """Проверяет, может ли колонка содержать оценочную метрику СОП."""
     normalized_column = normalize_text(column_name)
     if normalized_column in IDENTITY_COLUMNS:
         return False
@@ -126,6 +167,7 @@ def is_score_column(column_name: str) -> bool:
 
 
 def select_score_columns(frame: pd.DataFrame) -> list[str]:
+    """Выбирает из таблицы числовые колонки с оценками в диапазоне от 1 до 5."""
     score_columns: list[str] = []
     for column in frame.columns:
         column_name = normalize_text(column)
@@ -141,6 +183,7 @@ def select_score_columns(frame: pd.DataFrame) -> list[str]:
 
 
 def read_sop_workbook(path: Path) -> dict[str, pd.DataFrame]:
+    """Читает обязательные листы СОП из xlsx-файла и проверяет базовые колонки."""
     if not path.exists():
         raise SopAnalysisError(f"SOP workbook does not exist: {path}")
 
@@ -163,6 +206,7 @@ def read_sop_workbook(path: Path) -> dict[str, pd.DataFrame]:
 
 
 def build_metric_issues(row: pd.Series, score_columns: list[str], threshold: float) -> list[MetricIssue]:
+    """Возвращает список метрик строки, значения которых ниже указанного порога."""
     issues: list[MetricIssue] = []
     for column in score_columns:
         value = pd.to_numeric(row.get(column), errors="coerce")
@@ -175,6 +219,7 @@ def build_metric_issues(row: pd.Series, score_columns: list[str], threshold: flo
 
 
 def build_metric_values(row: pd.Series, score_columns: list[str]) -> dict[str, float]:
+    """Собирает числовые оценочные метрики из строки в словарь."""
     metric_values: dict[str, float] = {}
     for column in score_columns:
         value = pd.to_numeric(row.get(column), errors="coerce")
@@ -185,6 +230,7 @@ def build_metric_values(row: pd.Series, score_columns: list[str]) -> dict[str, f
 
 
 def build_row_issue(sheet_name: str, row: pd.Series, score_columns: list[str]) -> RowIssue | None:
+    """Строит описание проблемной строки СОП или возвращает None для безопасной строки."""
     metric_values = build_metric_values(row, score_columns)
     if not metric_values:
         return None
@@ -195,7 +241,7 @@ def build_row_issue(sheet_name: str, row: pd.Series, score_columns: list[str]) -
 
     return {
         "sheet": sheet_name,
-        "program": normalize_text(row.get("Программа")),
+        "program": build_program_key(row.get("Программа"), row.get("Уровень")),
         "campus": normalize_text(row.get("Кампус")),
         "level": normalize_text(row.get("Уровень")),
         "course": normalize_text(row.get("Курс")),
@@ -210,6 +256,7 @@ def build_row_issue(sheet_name: str, row: pd.Series, score_columns: list[str]) -
 
 
 def collect_row_issues(frames: dict[str, pd.DataFrame]) -> list[RowIssue]:
+    """Собирает все проблемные строки со всех анализируемых листов СОП."""
     issues: list[RowIssue] = []
     for sheet_name, frame in frames.items():
         score_columns = select_score_columns(frame)
@@ -221,6 +268,7 @@ def collect_row_issues(frames: dict[str, pd.DataFrame]) -> list[RowIssue]:
 
 
 def strongest_status(statuses: list[Status]) -> Status:
+    """Возвращает самый строгий статус из списка статусов."""
     if STATUS_ALARM in statuses:
         return STATUS_ALARM
     if STATUS_RISK in statuses:
@@ -229,6 +277,7 @@ def strongest_status(statuses: list[Status]) -> Status:
 
 
 def summarize_disciplines(row_issues: list[RowIssue]) -> list[DisciplineSummary]:
+    """Агрегирует проблемные строки до уровня дисциплин внутри программ."""
     grouped: dict[tuple[str, str], list[RowIssue]] = {}
     for issue in row_issues:
         key = (issue["program"], issue["discipline"])
@@ -257,6 +306,7 @@ def summarize_programs(
     discipline_summaries: list[DisciplineSummary],
     row_issues: list[RowIssue],
 ) -> list[ProgramSummary]:
+    """Агрегирует статусы дисциплин до уровня программы с учетом уровня обучения."""
     disciplines_by_program: dict[str, list[DisciplineSummary]] = {}
     for discipline in discipline_summaries:
         program = discipline["program"]
@@ -292,6 +342,7 @@ def summarize_programs(
 
 
 def analyze_sop_workbook(path: Path) -> SopAnalysisResult:
+    """Запускает полный анализ xlsx-файла СОП и возвращает структурированный результат."""
     frames = read_sop_workbook(path)
     row_issues = collect_row_issues(frames)
     discipline_summaries = summarize_disciplines(row_issues)
@@ -305,6 +356,7 @@ def analyze_sop_workbook(path: Path) -> SopAnalysisResult:
 
 
 def write_analysis_outputs(result: SopAnalysisResult, output_dir: Path) -> None:
+    """Сохраняет результаты анализа в JSON и CSV-файлы для проверки и истории."""
     output_dir.mkdir(parents=True, exist_ok=True)
     json_path = output_dir / "sop_analysis.json"
     json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
