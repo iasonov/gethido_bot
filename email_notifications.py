@@ -19,15 +19,7 @@ from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import (
-    ListFlowable,
-    ListItem,
-    Paragraph,
-    SimpleDocTemplate,
-    Spacer,
-    Table,
-    TableStyle,
-)
+from reportlab.platypus import ListFlowable, ListItem, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from program_contacts import ProgramContact
 from sop_analysis import (
@@ -112,11 +104,7 @@ def read_config_value(name: str, secret_values: dict[str, str]) -> str:
     raise EmailNotificationError(f"Missing required SMTP configuration value: {name}")
 
 
-def read_optional_config_value(
-    name: str,
-    secret_values: dict[str, str],
-    fallback: str,
-) -> str:
+def read_optional_config_value(name: str, secret_values: dict[str, str], fallback: str) -> str:
     """Возвращает необязательное значение настройки или переданное значение по умолчанию."""
     env_value = os.environ.get(name)
     if env_value is not None and env_value != "":
@@ -153,10 +141,8 @@ def get_program_disciplines(
     program: str,
     discipline_summaries: list[DisciplineSummary],
 ) -> list[DisciplineSummary]:
-    """Возвращает проблемные дисциплины выбранной программы, отсортированные по риску."""
-    disciplines = [
-        discipline for discipline in discipline_summaries if discipline["program"] == program
-    ]
+    """Возвращает отсортированные резюме дисциплин для одной программы."""
+    disciplines = [discipline for discipline in discipline_summaries if discipline["program"] == program]
     return sorted(disciplines, key=lambda item: (severity_rank(item["status"]), item["min_score"]))
 
 
@@ -165,11 +151,7 @@ def get_program_row_issues(program: str, row_issues: list[RowIssue]) -> list[Row
     issues = [issue for issue in row_issues if issue["program"] == program]
     return sorted(
         issues,
-        key=lambda item: (
-            severity_rank(item["status"]),
-            item["min_score"],
-            item["discipline"],
-        ),
+        key=lambda item: (severity_rank(item["status"]), item["min_score"], item["discipline"]),
     )
 
 
@@ -179,9 +161,17 @@ def format_metric_issues(issue: RowIssue) -> str:
     return "; ".join(f"{metric['metric']}: {metric['value']:.2f}" for metric in metrics)
 
 
+def format_metric_issues_for_pdf(issue: RowIssue) -> str:
+    """Форматирует список проблемных метрик с переносами строк для PDF."""
+    metrics = issue["metrics_below_3"] if issue["metrics_below_3"] else issue["metrics_below_4"]
+    return "<br/>".join(
+        f"{html.escape(metric['metric'])}: {metric['value']:.2f}" for metric in metrics
+    )
+
+
 def build_subject(program_summary: ProgramSummary, module_label: str) -> str:
-    """Формирует тему письма по программе, статусу и периоду СОП."""
-    return f"[СОП] {program_summary['status']}: {program_summary['program']}, {module_label}"
+    """Формирует тему письма по программе и периоду СОП."""
+    return f"[СОП, {module_label}] {program_summary['program']}" # {program_summary['status']}: 
 
 
 def build_attachment_file_name(program_name: str, module_label: str) -> str:
@@ -233,10 +223,10 @@ def build_text_discipline_section(
     if disciplines:
         for discipline in disciplines:
             lines.append(
-                f"- {discipline['discipline']}: минимальная оценка {discipline['min_score']:.2f}"
+                f"- {discipline['discipline']}, минимальная оценка {discipline['min_score']:.2f}"
             )
     else:
-        lines.append("- Нет дисциплин, которые соответствуют этому разделу.")
+        lines = [""]
     lines.append("")
     return lines
 
@@ -300,6 +290,11 @@ def build_pdf_attachment(
         leading=13,
         spaceAfter=4,
     )
+    gray_body_style = ParagraphStyle(
+        "SOPGrayBody",
+        parent=body_style,
+        textColor=colors.HexColor("#6b7280"),
+    )
     table_style = ParagraphStyle(
         "SOPTable",
         parent=body_style,
@@ -307,8 +302,19 @@ def build_pdf_attachment(
     )
 
     story: list[object] = [
+        Paragraph("Расшифровка статусов", heading_style),
+        Paragraph(
+            "Требует внимания - хотя бы одна средняя оценка ниже 3 баллов или хотя бы две средних оценки ниже 4 баллов.",
+            gray_body_style,
+        ),
+        Paragraph(
+            "Есть риски - хотя бы одна средняя оценка ниже 4 баллов.",
+            gray_body_style,
+        ),
+        Spacer(1, 4),
         Paragraph(html.escape(program_summary["program"]), title_style),
-        Paragraph(f"Период: {html.escape(module_label)}", body_style),
+        Paragraph(f"Период", heading_style),
+        Paragraph(f"{html.escape(module_label)}", body_style),
         Paragraph("Детали по преподавателям, дисциплинам и метрикам", heading_style),
     ]
 
@@ -326,7 +332,7 @@ def build_pdf_attachment(
                 Paragraph(html.escape(issue["discipline"]), table_style),
                 Paragraph(html.escape(issue["teacher"]), table_style),
                 Paragraph(html.escape(issue["status"]), table_style),
-                Paragraph(html.escape(format_metric_issues(issue)), table_style),
+                Paragraph(format_metric_issues_for_pdf(issue), table_style),
             ]
         )
 
@@ -351,9 +357,10 @@ def build_pdf_attachment(
 
     recommendation_items = ListFlowable(
         [
-            ListItem(Paragraph("проверить дисциплины и преподавателей с оценками ниже порогов;", body_style)),
+            ListItem(Paragraph("проверить дисциплины и преподавателей с низкими оценками;", body_style)),
+            ListItem(Paragraph("изучить комментарии студентов в выгрузках СОП;", body_style)),
             ListItem(Paragraph("обсудить причины низких оценок с командой программы;", body_style)),
-            ListItem(Paragraph("определить корректирующие действия по содержанию, коммуникации и организации дисциплины.", body_style)), # ,?
+            ListItem(Paragraph("определить корректирующие действия по содержанию, коммуникации и организации дисциплины.", body_style)),
         ],
         bulletType="bullet",
         leftIndent=12,
@@ -370,6 +377,7 @@ def build_pdf_attachment(
 
     document.build(story)
     return buffer.getvalue()
+
 
 
 def build_text_body(
@@ -412,6 +420,11 @@ def build_text_body(
     lines.extend(
         [
             "Подробные сведения по преподавателям, дисциплинам и метрикам приложены в PDF-файле.",
+            "P.S. Насколько удобен такой формат выгрузки и подсвечивания зон риска? Буду признателен обратной связи.",
+            "",
+            "С уважением, Игорь Асонов",
+            "Руководитель центра аналитики Вышки Онлайн",
+            "+79052715044, t.me/iasonov",
             "",
         ]
     )
@@ -431,61 +444,78 @@ def build_html_body(
     attention_disciplines = select_disciplines_by_status(disciplines, STATUS_ALARM)
     risk_disciplines = select_disciplines_by_status(disciplines, STATUS_RISK)
 
-    attention_rows = "\n".join(
-        build_discipline_row_html(discipline) for discipline in attention_disciplines
-    )
-    risk_rows = "\n".join(build_discipline_row_html(discipline) for discipline in risk_disciplines)
-    issue_rows = "\n".join(build_issue_row_html(issue) for issue in row_issues)
+    attention_section = ""
+    if attention_disciplines:
+        attention_rows = "\n".join(
+            build_discipline_row_html(discipline) for discipline in attention_disciplines
+        )
+        attention_section = f"""
+    <h3>Дисциплины, требующие внимания</h3>
+    <p><i>Хотя бы одна средняя оценка ниже 3 баллов или хотя бы две средних оценки ниже 4 баллов.</i></p>
+    <table class="sop-table sop-table-discipline" border="1" cellpadding="6" cellspacing="0">
+      <colgroup>
+        <col style="width: 75%;" />
+        <col style="width: 25%;" />
+      </colgroup>
+      <thead><tr><th>Дисциплина</th><th>Минимальная оценка</th></tr></thead>
+      <tbody>{attention_rows}</tbody>
+    </table>
+""".rstrip()
 
-    if attention_rows == "":
-        attention_rows = "<tr><td colspan=\"2\">Нет дисциплин для этого раздела.</td></tr>"
-    if risk_rows == "":
-        risk_rows = "<tr><td colspan=\"2\">Нет дисциплин для этого раздела.</td></tr>"
-    if issue_rows == "":
-        issue_rows = "<tr><td colspan=\"4\">Нет деталей по преподавателям и метрикам.</td></tr>"
+    risk_section = ""
+    if risk_disciplines:
+        risk_rows = "\n".join(build_discipline_row_html(discipline) for discipline in risk_disciplines)
+        risk_section = f"""
+    <h3>Дисциплины, имеющие риски</h3>
+    <p><i>Хотя бы одна средняя оценка ниже 4 баллов.</i></p>
+    <table class="sop-table sop-table-discipline" border="1" cellpadding="6" cellspacing="0">
+      <colgroup>
+        <col style="width: 75%;" />
+        <col style="width: 25%;" />
+      </colgroup>
+      <thead><tr><th>Дисциплина</th><th>Минимальная оценка</th></tr></thead>
+      <tbody>{risk_rows}</tbody>
+    </table>
+""".rstrip()
+
+    # issue_rows = "\n".join(build_issue_row_html(issue) for issue in row_issues)
+    # if issue_rows == "":
+    #     issue_rows = "<tr><td colspan=\"4\">Нет деталей по преподавателям и метрикам.</td></tr>"
 
     return f"""
 <html>
   <body>
+    <style>
+      table.sop-table {{
+        width: 100%;
+        table-layout: fixed;
+      }}
+      table.sop-table th,
+      table.sop-table td {{
+        word-break: break-word;
+      }}
+      table.sop-table-discipline {{
+        width: 100%;
+        table-layout: fixed;
+      }}
+    </style>
     <p>Добрый день!</p>
     <p>
       По итогам анализа студенческой оценки преподавания за {html.escape(module_label)} по программе
       «{html.escape(program_summary['program'])}» видим моменты, на которые просим обратить внимание.
     </p>
-    <h3>Дисциплины, требующие внимания</h3>
-    <p>Хотя бы одна средняя оценка ниже 3 баллов или хотя бы две средних оценки ниже 4 баллов.</p>
-    <table border="1" cellpadding="6" cellspacing="0">
-      <thead><tr><th>Дисциплина</th><th>Минимальная оценка</th></tr></thead>
-      <tbody>{attention_rows}</tbody>
-    </table>
-    <h3>Дисциплины, имеющие риски</h3>
-    <p>Хотя бы одна средняя оценка ниже 4 баллов.</p>
-    <table border="1" cellpadding="6" cellspacing="0">
-      <thead><tr><th>Дисциплина</th><th>Минимальная оценка</th></tr></thead>
-      <tbody>{risk_rows}</tbody>
-    </table>
-    
+    {attention_section}
+    {risk_section}
     <p>Подробные сведения по преподавателям, дисциплинам и метрикам приложены в PDF-файле.</p>
+    <p>P.S. Насколько удобен такой формат выгрузки и подсвечивания зон риска? Буду признателен обратной связи.</p>
+    <p>С уважением, Игорь Асонов<br />
+      Руководитель центра аналитики Вышки Онлайн<br />
+      +79052715044, t.me/iasonov
+    </p>
   </body>
 </html>
 """.strip()
-# <p>Детали по преподавателям, дисциплинам и метрикам представлены в приложении.</p>
-# <h3>Детали по преподавателям, дисциплинам и метрикам</h3>
-# <table border="1" cellpadding="6" cellspacing="0">
-#   <thead>
-#     <tr>
-#       <th>Дисциплина</th><th>Преподаватель</th><th>Статус</th><th>Метрики</th>
-#     </tr>
-#   </thead>
-#   <tbody>{issue_rows}</tbody>
-# </table>
-# <h3>Как может выглядеть работа на основании обратной связи</h3>
-# <ul>
-#   <li>проверить дисциплины и преподавателей с оценками ниже порогов;</li>
-#   <li>обсудить причины низких оценок с командой программы;</li>
-#   <li>определить корректирующие действия по содержанию, коммуникации и организации дисциплины.</li>
-# </ul>
-    
+
 
 def build_program_notification(
     program_summary: ProgramSummary,
@@ -518,11 +548,15 @@ def build_program_notification(
     message["To"] = ", ".join(to_emails)
     message["Cc"] = ", ".join(cc_emails)
     message.set_content(
-        build_text_body(program_summary, disciplines, issues, source_label, module_label)
+        build_text_body(program_summary, disciplines, issues, source_label, module_label),
+        charset="utf-8",
+        cte="8bit",
     )
     message.add_alternative(
         build_html_body(program_summary, disciplines, issues, source_label, module_label),
         subtype="html",
+        charset="utf-8",
+        cte="8bit",
     )
     message.add_attachment(
         build_pdf_attachment(program_summary, module_label, issues),

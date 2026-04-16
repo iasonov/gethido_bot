@@ -106,6 +106,9 @@ class EmailNotificationTests(unittest.TestCase):
         self.assertIn("Дисциплины, требующие внимания", plain_body)
         self.assertIn("Дисциплины, имеющие риски", plain_body)
         self.assertIn("Подробные сведения по преподавателям, дисциплинам и метрикам приложены в PDF-файле.", plain_body)
+        self.assertIn("С уважением, Игорь Асонов", plain_body)
+        self.assertIn("Руководитель центра аналитики Вышки Онлайн", plain_body)
+        self.assertIn("+79052715044, t.me/iasonov", plain_body)
         self.assertIn("<h3>Дисциплины, требующие внимания</h3>", html_body)
         self.assertIn("<h3>Дисциплины, имеющие риски</h3>", html_body)
         self.assertIn("<h3>Детали по преподавателям, дисциплинам и метрикам</h3>", html_body)
@@ -117,6 +120,23 @@ class EmailNotificationTests(unittest.TestCase):
         attachment_payload = attachments[0].get_payload(decode=True)
         self.assertIsNotNone(attachment_payload)
         self.assertTrue(attachment_payload.startswith(b"%PDF-"))
+
+    def test_html_omits_empty_risk_block(self) -> None:
+        """HTML should not render empty discipline blocks."""
+        notification = build_program_notification(
+            build_program_summary(),
+            build_contact(),
+            [build_discipline_summary()],
+            [build_row_issue()],
+            "source.xlsx",
+            "3 модуль 2025/2026",
+            "sender@hse.ru",
+            "Sender",
+        )
+
+        html_body = notification["message"].get_body(preferencelist=("html",)).get_content()
+        self.assertIn("<h3>Дисциплины, требующие внимания</h3>", html_body)
+        self.assertNotIn("<h3>Дисциплины, имеющие риски</h3>", html_body)
 
     def test_empty_to_raises_error(self) -> None:
         """An empty recipient list should raise an explicit error."""
