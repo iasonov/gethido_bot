@@ -115,9 +115,12 @@ def run_send(args: argparse.Namespace) -> int:
     module_label = resolve_optional_text(args.module_label, DEFAULT_MODULE_LABEL)
     output_dir = Path(resolve_optional_text(args.out_dir, "output/sop_send"))
     if args.dry_run:
-        from_email = "no-reply@example.invalid"
-        from_name = "Онлайн-кампус"
-        smtp_config = None
+        smtp_config = read_smtp_config()
+        from_email = smtp_config["from_email"]
+        from_name = smtp_config["from_name"]
+        # from_email = "no-reply@example.invalid"
+        # from_name = "Онлайн-кампус"
+        # smtp_config = None
     else:
         smtp_config = read_smtp_config()
         from_email = smtp_config["from_email"]
@@ -159,7 +162,7 @@ def main() -> None:
     """Точка входа для запуска модуля через python -m sop_cli."""
     parser = build_parser()
     if len(sys.argv) == 1:
-        args = parser.parse_args(["preview", "--sop-xlsx", "sop.xlsx", "--contacts-csv", "program_contacts.csv", "--out-dir", "output"])
+        args = parser.parse_args(["send", "--sop-xlsx", "sop.xlsx", "--contacts-csv", "program_contacts.csv", "--dry-run", "true"])
     else:
         args = parser.parse_args(sys.argv[1:])
     exit_code = run_command(args)
