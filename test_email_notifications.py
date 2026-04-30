@@ -1,6 +1,9 @@
 import smtplib
 import unittest
+from io import BytesIO
 from unittest.mock import Mock, patch
+
+from pypdf import PdfReader
 
 from email_notifications import (
     PERMANENT_CC_EMAILS,
@@ -73,7 +76,7 @@ def build_row_issue() -> RowIssue:
         "course": "1",
         "discipline": "Курс 1",
         "activity": "Преподавание",
-        "teacher": "Иванов Иван",
+        "teacher": "",
         "status": "Требует внимания",
         "metrics_below_3": [{"metric": "Общее качество", "value": 2.9}],
         "metrics_below_4": [{"metric": "Общее качество", "value": 2.9}],
@@ -124,6 +127,12 @@ class EmailNotificationTests(unittest.TestCase):
         attachment_payload = attachments[0].get_payload(decode=True)
         self.assertIsNotNone(attachment_payload)
         self.assertTrue(attachment_payload.startswith(b"%PDF-"))
+
+        reader = PdfReader(BytesIO(attachment_payload))
+        pdf_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        self.assertIn("Преподаватель", pdf_text)
+        self.assertIn("Вид занятий:", pdf_text)
+        self.assertIn("Преподавание", pdf_text)
 
     def test_html_omits_empty_risk_block(self) -> None:
         """HTML should not render empty discipline blocks."""

@@ -237,6 +237,15 @@ def build_text_discipline_section(
     return lines
 
 
+def format_pdf_teacher_label(issue: RowIssue) -> str:
+    """Формирует значение для PDF-колонки преподавателя или вида занятий."""
+    if issue["teacher"] != "":
+        return f"Преподаватель: {issue['teacher']}"
+    if issue["activity"] != "":
+        return f"Вид занятий: {issue['activity']}"
+    return ""
+
+
 def register_pdf_font() -> str:
     """Регистрирует кириллические шрифты для генерации PDF."""
     from reportlab.pdfbase import pdfmetrics
@@ -328,7 +337,7 @@ def build_pdf_attachment(
         [
             Paragraph(html.escape("Дисциплина"), table_style),
             Paragraph(html.escape("Курс"), table_style),
-            Paragraph(html.escape("Преподаватель"), table_style),
+            Paragraph(html.escape("Объект оценки"), table_style),
             Paragraph(html.escape("Статус"), table_style),
             Paragraph(html.escape("Метрики"), table_style),
         ]
@@ -338,7 +347,7 @@ def build_pdf_attachment(
             [
                 Paragraph(html.escape(issue["discipline"]), table_style),
                 Paragraph(html.escape(issue["course"]), table_style),
-                Paragraph(html.escape(issue["teacher"]), table_style),
+                Paragraph(html.escape(format_pdf_teacher_label(issue)), table_style),
                 Paragraph(html.escape(issue["status"]), table_style),
                 Paragraph(format_metric_issues_for_pdf(issue), table_style),
             ]
