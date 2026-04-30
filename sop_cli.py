@@ -11,6 +11,7 @@ from email_notifications import (
     build_program_notification,
     read_smtp_config,
     send_email_message,
+    send_test_email_message,
     write_notification_previews,
     write_recipients_csv,
 )
@@ -50,6 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
     send_parser.add_argument("--dry-run", type=parse_bool, required=True)
     send_parser.add_argument("--out-dir", required=False)
     send_parser.add_argument("--module-label", required=False)
+
+    smtp_test_parser = subparsers.add_parser("smtp-test")
+    smtp_test_parser.add_argument("--recipient", required=True)
 
     return parser
 
@@ -149,12 +153,22 @@ def run_send(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_smtp_test(args: argparse.Namespace) -> int:
+    """Отправляет тестовое письмо на один адрес через текущие SMTP-настройки."""
+    smtp_config = read_smtp_config()
+    send_test_email_message(args.recipient, smtp_config)
+    print(f"SMTP test email sent to: {args.recipient}")
+    return 0
+
+
 def run_command(args: argparse.Namespace) -> int:
     """Направляет разобранные аргументы в нужную CLI-команду."""
     if args.command == "preview":
         return run_preview(args)
     if args.command == "send":
         return run_send(args)
+    if args.command == "smtp-test":
+        return run_smtp_test(args)
     raise ValueError(f"Unsupported command: {args.command}")
 
 
@@ -162,7 +176,8 @@ def main() -> None:
     """Точка входа для запуска модуля через python -m sop_cli."""
     parser = build_parser()
     if len(sys.argv) == 1:
-        args = parser.parse_args(["send", "--sop-xlsx", "sop.xlsx", "--contacts-csv", "program_contacts.csv", "--dry-run", "true"])
+        # args = parser.parse_args(["send", "--sop-xlsx", "sop.xlsx", "--contacts-csv", "program_contacts.csv", "--dry-run", "false"])
+        args = parser.parse_args(["smtp-test", "--recipient", "test@example.com"])
     else:
         args = parser.parse_args(sys.argv[1:])
     exit_code = run_command(args)

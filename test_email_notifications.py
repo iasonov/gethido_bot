@@ -10,6 +10,7 @@ from email_notifications import (
     EmailNotificationError,
     build_program_notification,
     send_email_message,
+    send_test_email_message,
 )
 from program_contacts import ProgramContact
 from sop_analysis import DisciplineSummary, ProgramSummary, RowIssue
@@ -203,11 +204,69 @@ class EmailNotificationTests(unittest.TestCase):
                 "use_tls": False,
                 "attempts": 2,
                 "retry_delay_seconds": 1,
+                "timeout_seconds": 7,
             },
         )
 
         self.assertEqual(mock_smtp.call_count, 2)
         mock_sleep.assert_called_once_with(1)
+
+    @patch("email_notifications.smtplib.SMTP")
+    def test_test_smtp_send_uses_single_recipient(self, mock_smtp: Mock) -> None:
+        """Test SMTP send should target exactly one recipient."""
+        smtp_client = Mock()
+        smtp_client.__enter__ = Mock(return_value=smtp_client)
+        smtp_client.__exit__ = Mock(return_value=False)
+        mock_smtp.return_value = smtp_client
+
+        send_test_email_message(
+            "recipient@example.com",
+            {
+                "host": "smtp.example.com",
+                "port": 587,
+                "username": "u",
+                "password": "p",
+                "from_email": "sender@hse.ru",
+                "from_name": "Sender",
+                "use_tls": False,
+                "attempts": 1,
+                "retry_delay_seconds": 1,
+                "timeout_seconds": 11,
+            },
+        )
+
+        mock_smtp.assert_called_once_with("smtp.example.com", 587, timeout=11)
+        smtp_client.send_message.assert_called_once()
+        sent_message = smtp_client.send_message.call_args.args[0]
+        self.assertEqual(sent_message["To"], "recipient@example.com")
+        self.assertEqual(smtp_client.send_message.call_args.kwargs["to_addrs"], ["recipient@example.com"])
+
+    @patch("email_notifications.smtplib.SMTP_SSL")
+    def test_test_smtp_send_uses_ssl_for_port_465(self, mock_smtp_ssl: Mock) -> None:
+        """Port 465 should use implicit TLS via SMTP_SSL."""
+        smtp_client = Mock()
+        smtp_client.__enter__ = Mock(return_value=smtp_client)
+        smtp_client.__exit__ = Mock(return_value=False)
+        mock_smtp_ssl.return_value = smtp_client
+
+        send_test_email_message(
+            "recipient@example.com",
+            {
+                "host": "smtp.example.com",
+                "port": 465,
+                "username": "u",
+                "password": "p",
+                "from_email": "sender@hse.ru",
+                "from_name": "Sender",
+                "use_tls": True,
+                "attempts": 1,
+                "retry_delay_seconds": 1,
+                "timeout_seconds": 11,
+            },
+        )
+
+        mock_smtp_ssl.assert_called_once_with("smtp.example.com", 465, timeout=11)
+        smtp_client.send_message.assert_called_once()
 
 
 if __name__ == "__main__":

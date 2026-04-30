@@ -57,6 +57,7 @@ class SmtpConfig(TypedDict):
     use_tls: bool
     attempts: int
     retry_delay_seconds: int
+    timeout_seconds: int
 
 
 class ProgramNotification(TypedDict):
@@ -86,6 +87,7 @@ def read_secret_values() -> dict[str, str]:
         "SMTP_USE_TLS",
         "SMTP_ATTEMPTS",
         "SMTP_RETRY_DELAY_SECONDS",
+        "SMTP_TIMEOUT_SECONDS",
     ]:
         value = getattr(my_secrets, name, None)
         if value is not None:
@@ -644,29 +646,61 @@ def read_smtp_config() -> SmtpConfig:
         "retry_delay_seconds": int(
             read_optional_config_value("SMTP_RETRY_DELAY_SECONDS", secret_values, "10")
         ),
+        "timeout_seconds": int(read_optional_config_value("SMTP_TIMEOUT_SECONDS", secret_values, "30")),
     }
 
 
-def send_email_message(notification: ProgramNotification, config: SmtpConfig) -> None:
+def build_test_email_message(from_email: str, from_name: str, recipient_email: str) -> EmailMessage:
+    """Создает тестовое письмо для проверки SMTP-доступности."""
+    message = EmailMessage()
+    message["Subject"] = "SMTP test from gethido_bot"
+    message["From"] = formataddr((from_name, from_email))
+    message["To"] = recipient_email
+    message.set_content(
+        "This is a test email sent by gethido_bot to verify SMTP configuration.",
+        charset="utf-8",
+        cte="8bit",
+    )
+    return message
+
+
+def send_smtp_message(
+    message: EmailMessage,
+    recipients: list[str],
+    program_label: str,
+    config: SmtpConfig,
+) -> None:
     """Отправляет письмо через SMTP с повторными попытками при временных ошибках."""
-    recipients = [*notification["to"], *notification["cc"]]
     last_error: Exception | None = None
     for attempt in range(1, config["attempts"] + 1):
         try:
-            with smtplib.SMTP(config["host"], config["port"]) as smtp:
+            if config["port"] == 465:
+                smtp_connection: smtplib.SMTP = smtplib.SMTP_SSL(
+                    config["host"],
+                    config["port"],
+                    timeout=config["timeout_seconds"],
+                )
+            else:
+                smtp_connection = smtplib.SMTP(
+                    config["host"],
+                    config["port"],
+                    timeout=config["timeout_seconds"],
+                )
+
+            with smtp_connection as smtp:
                 smtp.ehlo()
-                if config["use_tls"]:
+                if config["use_tls"] and config["port"] != 465:
                     smtp.starttls(context=ssl.create_default_context())
                     smtp.ehlo()
                 smtp.login(config["username"], config["password"])
-                smtp.send_message(notification["message"], to_addrs=recipients)
+                smtp.send_message(message, to_addrs=recipients)
                 return
         except (smtplib.SMTPException, OSError) as error:
             last_error = error
             logging.warning(
                 "smtp_send_failed",
                 extra={
-                    "program": notification["program"],
+                    "program": program_label,
                     "attempt": attempt,
                     "attempts": config["attempts"],
                     "error": repr(error),
@@ -676,8 +710,20 @@ def send_email_message(notification: ProgramNotification, config: SmtpConfig) ->
                 time.sleep(config["retry_delay_seconds"])
 
     raise EmailNotificationError(
-        f"Failed to send SOP notification for '{notification['program']}': {last_error!r}"
+        f"Failed to send SMTP message for '{program_label}': {last_error!r}"
     )
+
+
+def send_email_message(notification: ProgramNotification, config: SmtpConfig) -> None:
+    """Отправляет письма с SOP-уведомлением через SMTP."""
+    recipients = [*notification["to"], *notification["cc"]]
+    send_smtp_message(notification["message"], recipients, notification["program"], config)
+
+
+def send_test_email_message(recipient_email: str, config: SmtpConfig) -> None:
+    """Отправляет тестовое письмо на один адрес для проверки SMTP отдельно от SOP."""
+    message = build_test_email_message(config["from_email"], config["from_name"], recipient_email)
+    send_smtp_message(message, [recipient_email], f"SMTP test to {recipient_email}", config)
 
 
 def write_notification_previews(
