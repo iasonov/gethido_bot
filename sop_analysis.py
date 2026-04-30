@@ -65,6 +65,7 @@ class RowIssue(TypedDict):
 
 class DisciplineSummary(TypedDict):
     program: str
+    course: str
     discipline: str
     status: Status
     issue_count: int
@@ -116,6 +117,22 @@ def normalize_level(value: str) -> str:
     return normalize_text(value)
 
 
+def normalize_course(value: Any) -> str:
+    """Приводит курс к удобочитаемому строковому виду."""
+    text = normalize_text(value)
+    if text == "":
+        return ""
+
+    numeric_value = pd.to_numeric(text, errors="coerce")
+    if pd.isna(numeric_value):
+        return text
+
+    numeric_course = float(numeric_value)
+    if numeric_course.is_integer():
+        return str(int(numeric_course))
+    return str(numeric_course)
+
+
 def build_program_key(program: str, level: str) -> str:
     """Формирует ключ программы с уровнем, чтобы различать одноименные программы."""
     normalized_program = normalize_text(program)
@@ -129,7 +146,7 @@ def classify_metrics(metric_values: dict[str, float]) -> Status:
     """Определяет статус набора оценочных метрик по заданным порогам риска."""
     below_3_count = sum(1 for value in metric_values.values() if value < 3)
     below_4_count = sum(1 for value in metric_values.values() if value < 4)
-    if below_3_count >= 1:
+    if below_3_count >= 1 or below_4_count >= 2:
         return STATUS_ALARM
     if below_4_count >= 1:
         return STATUS_RISK
@@ -226,7 +243,7 @@ def build_row_issue(sheet_name: str, row: pd.Series, score_columns: list[str]) -
         "program": build_program_key(row.get("Программа"), row.get("Уровень")),
         "campus": normalize_text(row.get("Кампус")),
         "level": normalize_text(row.get("Уровень")),
-        "course": normalize_text(row.get("Курс")),
+        "course": normalize_course(row.get("Курс")),
         "discipline": normalize_text(row.get("Дисциплина")),
         "activity": normalize_text(row.get("Вид занятий")),
         "teacher": normalize_text(row.get("ФИО преподавателя")),
@@ -260,19 +277,20 @@ def strongest_status(statuses: list[Status]) -> Status:
 
 def summarize_disciplines(row_issues: list[RowIssue]) -> list[DisciplineSummary]:
     """Агрегирует проблемные строки до уровня дисциплин внутри программ."""
-    grouped: dict[tuple[str, str], list[RowIssue]] = {}
+    grouped: dict[tuple[str, str, str], list[RowIssue]] = {}
     for issue in row_issues:
-        key = (issue["program"], issue["discipline"])
+        key = (issue["program"], issue["course"], issue["discipline"])
         grouped[key] = [*grouped.get(key, []), issue]
 
     summaries: list[DisciplineSummary] = []
-    for (program, discipline), issues in grouped.items():
+    for (program, course, discipline), issues in grouped.items():
         statuses = [issue["status"] for issue in issues]
         alarm_count = sum(1 for issue in issues if issue["status"] == STATUS_ALARM)
-        risk_count  = sum(1 for issue in issues if issue["status"] == STATUS_RISK)
+        risk_count = sum(1 for issue in issues if issue["status"] == STATUS_RISK)
         summaries.append(
             {
                 "program": program,
+                "course": course,
                 "discipline": discipline,
                 "status": strongest_status(statuses),
                 "issue_count": len(issues),
@@ -281,7 +299,7 @@ def summarize_disciplines(row_issues: list[RowIssue]) -> list[DisciplineSummary]
                 "min_score": min(issue["min_score"] for issue in issues),
             }
         )
-    return sorted(summaries, key=lambda item: (item["program"], item["discipline"]))
+    return sorted(summaries, key=lambda item: (item["program"], item["course"], item["discipline"]))
 
 
 def summarize_programs(
@@ -357,3 +375,4 @@ def write_analysis_outputs(result: SopAnalysisResult, output_dir: Path) -> None:
         index=False,
         encoding="utf-8-sig",
     )
+

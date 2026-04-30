@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import csv
 import html
@@ -143,7 +143,10 @@ def get_program_disciplines(
 ) -> list[DisciplineSummary]:
     """Возвращает отсортированные резюме дисциплин для одной программы."""
     disciplines = [discipline for discipline in discipline_summaries if discipline["program"] == program]
-    return sorted(disciplines, key=lambda item: (severity_rank(item["status"]), item["min_score"]))
+    return sorted(
+        disciplines,
+        key=lambda item: (severity_rank(item["status"]), item["course"], item["discipline"], item["min_score"]),
+    )
 
 
 def get_program_row_issues(program: str, row_issues: list[RowIssue]) -> list[RowIssue]:
@@ -151,7 +154,7 @@ def get_program_row_issues(program: str, row_issues: list[RowIssue]) -> list[Row
     issues = [issue for issue in row_issues if issue["program"] == program]
     return sorted(
         issues,
-        key=lambda item: (severity_rank(item["status"]), item["min_score"], item["discipline"]),
+        key=lambda item: (severity_rank(item["status"]), item["course"], item["discipline"], item["min_score"]),
     )
 
 
@@ -195,6 +198,7 @@ def build_discipline_row_html(discipline: DisciplineSummary) -> str:
     """Формирует одну строку HTML для таблицы дисциплин."""
     return (
         "<tr>"
+        f"<td>{html.escape(discipline['course'])}</td>"
         f"<td>{html.escape(discipline['discipline'])}</td>"
         f"<td>{discipline['min_score']:.2f}</td>"
         "</tr>"
@@ -206,6 +210,7 @@ def build_issue_row_html(issue: RowIssue) -> str:
     return (
         "<tr>"
         f"<td>{html.escape(issue['discipline'])}</td>"
+        f"<td>{html.escape(issue['course'])}</td>"
         f"<td>{html.escape(issue['teacher'])}</td>"
         f"<td>{html.escape(issue['status'])}</td>"
         f"<td>{html.escape(format_metric_issues(issue))}</td>"
@@ -222,8 +227,9 @@ def build_text_discipline_section(
     lines: list[str] = [title, explanation]
     if disciplines:
         for discipline in disciplines:
+            course_label = discipline["course"] if discipline["course"] != "" else "не указан"
             lines.append(
-                f"- {discipline['discipline']}, минимальная оценка {discipline['min_score']:.2f}"
+                f"- Курс {course_label}: {discipline['discipline']}, минимальная средняя оценка {discipline['min_score']:.2f}"
             )
     else:
         lines = [""]
@@ -321,6 +327,7 @@ def build_pdf_attachment(
     issue_rows: list[list[Paragraph]] = [
         [
             Paragraph(html.escape("Дисциплина"), table_style),
+            Paragraph(html.escape("Курс"), table_style),
             Paragraph(html.escape("Преподаватель"), table_style),
             Paragraph(html.escape("Статус"), table_style),
             Paragraph(html.escape("Метрики"), table_style),
@@ -330,13 +337,14 @@ def build_pdf_attachment(
         issue_rows.append(
             [
                 Paragraph(html.escape(issue["discipline"]), table_style),
+                Paragraph(html.escape(issue["course"]), table_style),
                 Paragraph(html.escape(issue["teacher"]), table_style),
                 Paragraph(html.escape(issue["status"]), table_style),
                 Paragraph(format_metric_issues_for_pdf(issue), table_style),
             ]
         )
 
-    issue_table = Table(issue_rows, colWidths=[45 * mm, 45 * mm, 28 * mm, 54 * mm], repeatRows=1)
+    issue_table = Table(issue_rows, colWidths=[32 * mm, 18 * mm, 38 * mm, 28 * mm, 56 * mm], repeatRows=1)
     issue_table.setStyle(
         TableStyle(
             [
@@ -454,10 +462,11 @@ def build_html_body(
     <p><i>Хотя бы одна средняя оценка ниже 3 баллов или хотя бы две средних оценки ниже 4 баллов.</i></p>
     <table class="sop-table-discipline" border="1" cellpadding="6" cellspacing="0">
       <colgroup>
-        <col style="width: 75%;" />
+        <col style="width: 20%;" />
+        <col style="width: 55%;" />
         <col style="width: 25%;" />
       </colgroup>
-      <thead><tr><th>Дисциплина</th><th>Минимальная оценка</th></tr></thead>
+      <thead><tr><th>Курс</th><th>Дисциплина</th><th>Минимальная средняя оценка</th></tr></thead>
       <tbody>{attention_rows}</tbody>
     </table>
 """.rstrip()
@@ -470,10 +479,11 @@ def build_html_body(
     <p><i>Хотя бы одна средняя оценка ниже 4 баллов.</i></p>
     <table class="sop-table-discipline" border="1" cellpadding="6" cellspacing="0">
       <colgroup>
-        <col style="width: 75%;" />
+        <col style="width: 20%;" />
+        <col style="width: 55%;" />
         <col style="width: 25%;" />
       </colgroup>
-      <thead><tr><th>Дисциплина</th><th>Минимальная оценка</th></tr></thead>
+      <thead><tr><th>Курс</th><th>Дисциплина</th><th>Минимальная средняя оценка</th></tr></thead>
       <tbody>{risk_rows}</tbody>
     </table>
 """.rstrip()
@@ -521,10 +531,14 @@ def build_html_body(
       }}
       table.sop-table-discipline th:nth-child(1),
       table.sop-table-discipline td:nth-child(1) {{
-        width: 75%;
+        width: 20%;
       }}
       table.sop-table-discipline th:nth-child(2),
       table.sop-table-discipline td:nth-child(2) {{
+        width: 55%;
+      }}
+      table.sop-table-discipline th:nth-child(3),
+      table.sop-table-discipline td:nth-child(3) {{
         width: 25%;
       }}
     </style>

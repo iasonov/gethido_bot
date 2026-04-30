@@ -31,11 +31,11 @@ class SopAnalysisRuleTests(unittest.TestCase):
 
         self.assertEqual(status, STATUS_ALARM)
 
-    def test_more_than_one_metric_below_four_has_risks(self) -> None:
+    def test_two_metrics_below_four_require_attention(self) -> None:
         """Проверяет, что оценки ниже 4 дают статус риска."""
         status = classify_metrics({"Качество": 3.5, "Ясность": 3.7})
 
-        self.assertEqual(status, STATUS_RISK)
+        self.assertEqual(status, STATUS_ALARM)
 
     def test_single_metric_below_four_has_risk(self) -> None:
         """Фиксирует текущую границу статуса для одной оценки ниже 4."""
@@ -60,6 +60,7 @@ class SopAnalysisRuleTests(unittest.TestCase):
         discipline_summaries: list[DisciplineSummary] = [
                 {
                     "program": "A",
+                    "course": "1",
                     "discipline": "D1",
                     "status": STATUS_ALARM,
                     "issue_count": 1,
@@ -69,6 +70,7 @@ class SopAnalysisRuleTests(unittest.TestCase):
                 },
                 {
                     "program": "A",
+                    "course": "1",
                     "discipline": "D2",
                     "status": STATUS_ALARM,
                     "issue_count": 1,
@@ -116,6 +118,7 @@ class SopAnalysisRuleTests(unittest.TestCase):
         discipline_summaries: list[DisciplineSummary] = [
                 {
                     "program": "A",
+                    "course": "1",
                     "discipline": "D1",
                     "status": STATUS_ALARM,
                     "issue_count": 1,
@@ -177,11 +180,17 @@ class SopWorkbookTests(unittest.TestCase):
             sheet = workbook.create_sheet(sheet_name)
             append_rows(sheet, rows)
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            path = Path(tmp_dir) / "sop.xlsx"
-            workbook.save(path)
+        path = Path("output") / "sop_analysis_test.xlsx"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            path.unlink()
 
+        workbook.save(path)
+        try:
             result = analyze_sop_workbook(path)
+        finally:
+            if path.exists():
+                path.unlink()
 
         self.assertEqual(result["program_summaries"][0]["program"], "Финансы / Магистратура")
         self.assertEqual(result["program_summaries"][0]["status"], STATUS_ALARM)

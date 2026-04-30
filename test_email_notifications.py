@@ -39,7 +39,8 @@ def build_discipline_summary() -> DisciplineSummary:
     """Return a test discipline summary for the attention block."""
     return {
         "program": "Финансы",
-        "discipline": "Курс 1",
+        "course": "1",
+        "discipline": "Common discipline",
         "status": "Требует внимания",
         "issue_count": 1,
         "alarm_issue_count": 1,
@@ -52,7 +53,8 @@ def build_risk_discipline_summary() -> DisciplineSummary:
     """Return a test discipline summary for the risk block."""
     return {
         "program": "Финансы",
-        "discipline": "Курс 2",
+        "course": "2",
+        "discipline": "Common discipline",
         "status": "Есть риски",
         "issue_count": 1,
         "alarm_issue_count": 0,
@@ -105,13 +107,15 @@ class EmailNotificationTests(unittest.TestCase):
 
         self.assertIn("Дисциплины, требующие внимания", plain_body)
         self.assertIn("Дисциплины, имеющие риски", plain_body)
+        self.assertIn("Курс 1: Common discipline", plain_body)
+        self.assertIn("Курс 2: Common discipline", plain_body)
         self.assertIn("Подробные сведения по преподавателям, дисциплинам и метрикам приложены в PDF-файле.", plain_body)
         self.assertIn("С уважением, Игорь Асонов", plain_body)
         self.assertIn("Руководитель центра аналитики Вышки Онлайн", plain_body)
         self.assertIn("+79052715044, t.me/iasonov", plain_body)
         self.assertIn("<h3>Дисциплины, требующие внимания</h3>", html_body)
         self.assertIn("<h3>Дисциплины, имеющие риски</h3>", html_body)
-        self.assertIn("<h3>Детали по преподавателям, дисциплинам и метрикам</h3>", html_body)
+        self.assertIn("<th>Курс</th>", html_body)
 
         attachments = list(message.iter_attachments())
         self.assertEqual(len(attachments), 1)
