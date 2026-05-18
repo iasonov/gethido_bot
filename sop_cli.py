@@ -176,8 +176,8 @@ def main() -> None:
     """Точка входа для запуска модуля через python -m sop_cli."""
     parser = build_parser()
     if len(sys.argv) == 1:
-        # args = parser.parse_args(["send", "--sop-xlsx", "sop.xlsx", "--contacts-csv", "program_contacts.csv", "--dry-run", "false"])
-        args = parser.parse_args(["smtp-test", "--recipient", "test@example.com"])
+        args = parser.parse_args(["send", "--sop-xlsx", "sop.xlsx", "--contacts-csv", "program_contacts.csv", "--dry-run", "false"])
+        # args = parser.parse_args(["smtp-test", "--recipient", "igor.asonov@gmail.com"])
     else:
         args = parser.parse_args(sys.argv[1:])
     exit_code = run_command(args)

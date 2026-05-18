@@ -31,7 +31,7 @@ from sop_analysis import (
 )
 
 
-PERMANENT_CC_EMAILS: tuple[str, ...] = ("yremezova@hse.ru", "ekalyaeva@hse.ru")
+PERMANENT_CC_EMAILS: tuple[str, ...] = ("yremezova@hse.ru", "ekalyaeva@hse.ru", "iasonov@hse.ru")
 DEFAULT_MODULE_LABEL = "3 модуль 2025/2026"
 PDF_FONT_CANDIDATE_PATHS: tuple[Path, ...] = (
     Path(r"C:\Windows\Fonts\arial.ttf"),
@@ -710,7 +710,10 @@ def send_smtp_message(
                 time.sleep(config["retry_delay_seconds"])
 
     raise EmailNotificationError(
-        f"Failed to send SMTP message for '{program_label}': {last_error!r}"
+        "Failed to send SMTP message for "
+        f"'{program_label}' using {config['host']}:{config['port']} "
+        f"(timeout={config['timeout_seconds']}, use_tls={config['use_tls']}, attempts={config['attempts']}): "
+        f"{last_error!r}"
     )
 
 
