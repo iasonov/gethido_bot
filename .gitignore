@@ -179,3 +179,5 @@ cython_debug/
 user_states.json
 output/
 data/sop_history/
+/output_2026_3quarter
+sop.xlsx
