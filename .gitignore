@@ -181,3 +181,6 @@ output/
 data/sop_history/
 /output_2026_3quarter
 sop.xlsx
+sop.xls
+.DS_Store
+/sop_outputs
