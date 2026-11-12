@@ -17,6 +17,7 @@ from email_notifications import (
 )
 from program_contacts import assert_all_programs_have_contacts, match_contacts, read_program_contacts
 from sop_analysis import SopAnalysisResult, analyze_sop_workbook, write_analysis_outputs
+from sop_strengths import analyze_sop_strengths, write_strengths_outputs
 
 
 def parse_bool(value: str) -> bool:
@@ -54,6 +55,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     smtp_test_parser = subparsers.add_parser("smtp-test")
     smtp_test_parser.add_argument("--recipient", required=True)
+
+    strengths_parser = subparsers.add_parser("strengths", help="Export positive SOP briefs for consultations")
+    strengths_parser.add_argument("--sop-xlsx", required=True)
+    strengths_parser.add_argument("--out-dir", required=True)
+    strengths_parser.add_argument("--module-label", required=True)
 
     return parser
 
@@ -169,7 +175,18 @@ def run_command(args: argparse.Namespace) -> int:
         return run_send(args)
     if args.command == "smtp-test":
         return run_smtp_test(args)
+    if args.command == "strengths":
+        return run_strengths(args)
     raise ValueError(f"Unsupported command: {args.command}")
+
+
+def run_strengths(args: argparse.Namespace) -> int:
+    """Export positive consultation briefs without contact or SMTP configuration."""
+    result = analyze_sop_strengths(Path(args.sop_xlsx), args.module_label)
+    output_dir: Path = Path(args.out_dir)
+    write_strengths_outputs(result, output_dir)
+    print(f"Consultation briefs created: {output_dir}")
+    return 0
 
 
 def main() -> None:
